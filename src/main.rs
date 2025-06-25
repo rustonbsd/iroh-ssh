@@ -40,10 +40,10 @@ async fn main() -> anyhow::Result<()> {
 async fn server_mode(ssh_port: u16) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::new().accept_incoming(true).accept_port(ssh_port).build().await?;
     println!("Connect to this this machine:\n\n");
-    println!("      irohssh root@{}\n\n", iroh_ssh.node_id());
+    println!("\niroh-ssh root@{}\n\n", iroh_ssh.node_id());
     println!("where root is the username you want to connect to.");
     println!("");
-    println!("client -> irohssh -> direct connect -> irohssh -> local ssh :{}", ssh_port);
+    println!("client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}", ssh_port);
     
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
