@@ -1,5 +1,12 @@
 [package]
 name = "iroh-ssh"
+description = "ssh over iroh"
+license = "MIT"
+authors = ["Zacharias Boehler <rustonbsd@mailfence.com>"]
+repository = "https://github.com/rustonbsd/iroh-ssh"
+readme = "README.md"
+keywords = ["networking"]
+categories = ["network-programming"]
 version = "0.1.0"
 edition = "2024"
 
