@@ -53,7 +53,7 @@ impl Builder {
             .bind()
             .await?;
 
-        let iroh_ssh = IrohSsh {
+        let mut iroh_ssh = IrohSsh {
             public_key: endpoint.node_id().as_bytes().clone(),
             secret_key: self.secret_key,
             inner: None,
@@ -66,7 +66,7 @@ impl Builder {
         }
         .spawn();
 
-        iroh_ssh.clone().add_inner(endpoint, router);
+        iroh_ssh.add_inner(endpoint, router);
 
         if self.accept_incoming && self.accept_port.is_some() {
             tokio::spawn({

@@ -68,7 +68,7 @@ async fn client_mode(target: String) -> anyhow::Result<()> {
     let mut ssh_stdout =  ssh_process.stdout.take().ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?;
 
     // Create iroh connection
-    let iroh_ssh = IrohSsh::new().build().await?;
+    let iroh_ssh = IrohSsh::new().accept_incoming(false).build().await?;
     let (mut iroh_write, mut iroh_read) = iroh_ssh.connect(iroh_node_id).await?.accept_bi().await?;
 
 
