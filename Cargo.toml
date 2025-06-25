@@ -1,0 +1,19 @@
+[package]
+name = "iroh-ssh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+iroh = "0.35"
+ed25519-dalek = { version = "2.0.0", features = ["rand_core"] }
+rand = "0.8"
+tokio-stream = { version = "0.1.15", features = ["sync"] }
+
+tokio = { version = "1", features = [
+    "macros",
+    "io-util",
+    "sync",
+    "rt",
+] }
+clap = { version = "4", features = ["derive"] }
