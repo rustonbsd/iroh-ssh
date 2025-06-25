@@ -53,7 +53,7 @@ iroh-ssh user@<NODE_ID>
 ## How It Works
 
 1.  **`iroh-ssh server`**: Starts an Iroh node, prints its unique `nodeid`, and listens for connections. For each incoming Iroh stream, it opens a corresponding TCP connection to the local `sshd` and proxies all data between them.
-2.  **`iroh-ssh <NODE_ID>`**: Starts a local TCP listener. When your `ssh` client connects to it, `iroh-ssh` opens a stream to the target `nodeid` over the Iroh network and proxies data between your local `ssh` client and the remote `sshd`.
+2.  **`iroh-ssh <NODE_ID>`**: Starts a local TCP listener. Runs your local `ssh` client and connects it to the TCP listener, `iroh-ssh` opens a stream to the target `nodeid` over the Iroh network and proxies data between your local `ssh` client and the remote `sshd`.
 
 This creates a secure end-to-end tunnel, with Iroh handling peer discovery and NAT traversal.
 
