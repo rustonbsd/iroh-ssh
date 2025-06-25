@@ -20,9 +20,9 @@ On your client you run:
 
 ## ToDo's
 
-[x] add ssh basic password login
-[ ] add -i support for certificates
-[ ] decide what other ssh native features to support
+- [x] add ssh basic password login
+- [ ] add -i support for certificates
+- [ ] decide what other ssh native features to support
 
 ## More Details
 `iroh-ssh` operates in two modes: a `server` mode for the machine you want to access, and a client mode for the machine you are connecting from.
@@ -48,15 +48,6 @@ Use the `nodeid` from the server to open a connection.
 ```sh
 # Paste the ssh user and nodeid from the server
 iroh-ssh user@<NODE_ID>
-```
-
-### 3. Connect with your SSH client
-
-In a **new terminal**, use your standard `ssh` client to connect to the local address provided by `iroh-ssh`.
-
-```sh
-# Use the address and port printed by iroh-ssh
-ssh user@127.0.0.1 -p 52695
 ```
 
 ## How It Works
