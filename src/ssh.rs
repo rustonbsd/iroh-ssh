@@ -7,11 +7,9 @@ macro_rules! ok_or_continue {
     };
 }
 
+use crate::{Builder, Inner, IrohSsh};
 use std::{pin::Pin, process::Stdio};
 
-use crate::{Builder, Inner, IrohSsh};
-
-use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use iroh::{
     Endpoint, NodeId, SecretKey,
@@ -102,63 +100,40 @@ impl IrohSsh {
     pub async fn connect(&self, ssh_user: &str, node_id: NodeId) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
-
-        // Start TCP listener
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let port = listener.local_addr()?.port();
 
-        println!("Local proxy listening on port {}", port);
-
-        // Spawn the proxy task
         tokio::spawn(async move {
             loop {
                 match listener.accept().await {
-                    Ok((mut stream, _)) => {
-                        println!("Local SSH client connected");
+                    Ok((mut stream, _)) => match conn.open_bi().await {
+                        Ok((mut iroh_send, mut iroh_recv)) => {
+                            tokio::spawn(async move {
+                                let (mut local_read, mut local_write) = stream.split();
+                                let a_to_b = async move {
+                                    tokio::io::copy(&mut local_read, &mut iroh_send).await
+                                };
+                                let b_to_a = async move {
+                                    tokio::io::copy(&mut iroh_recv, &mut local_write).await
+                                };
 
-                        // Accept bidirectional stream from iroh connection
-                        match conn.accept_bi().await {
-                            Ok((mut iroh_send, mut iroh_recv)) => {
-                                println!("Iroh bidirectional stream established");
-
-                                tokio::spawn(async move {
-                                    let (mut local_read, mut local_write) = stream.split();
-                                    let a_to_b = async move {
-                                        tokio::io::copy(&mut local_read, &mut iroh_send).await
-                                    };
-                                    let b_to_a = async move {
-                                        tokio::io::copy(&mut iroh_recv, &mut local_write).await
-                                    };
-
-                                    tokio::select! {
-                                        result = a_to_b => {
-                                            println!("Local->Iroh stream ended: {:?}", result);
-                                        },
-                                        result = b_to_a => {
-                                            println!("Iroh->Local stream ended: {:?}", result);
-                                        },
-                                    };
-                                });
-                            }
-                            Err(e) => {
-                                println!("Failed to accept iroh bi stream: {}", e);
-                                break;
-                            }
+                                tokio::select! {
+                                    result = a_to_b => {
+                                        let _ = result;
+                                    },
+                                    result = b_to_a => {
+                                        let _ = result;
+                                    },
+                                };
+                            });
                         }
-                    }
-                    Err(e) => {
-                        println!("Failed to accept TCP connection: {}", e);
-                        break;
-                    }
+                        Err(_) => break,
+                    },
+                    Err(_) => break,
                 }
             }
         });
-
-        // Give the listener a moment to be ready
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        println!("Starting SSH client...");
-
         let ssh_process = Command::new("ssh")
             .arg("-tt") // Force pseudo-terminal allocation
             .arg(format!("{}@127.0.0.1", ssh_user))

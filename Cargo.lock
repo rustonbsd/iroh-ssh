@@ -1669,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "iroh-ssh"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1678,6 +1678,8 @@ dependencies = [
  "rand 0.8.5",
  "tokio",
  "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

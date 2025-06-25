@@ -1,17 +1,15 @@
-use std::{process::Stdio, str::FromStr};
+use std::str::FromStr;
 
 use clap::{Parser, Subcommand, command};
 use iroh::NodeId;
 use iroh_ssh::IrohSsh;
-use tokio::process::Command;
-
 
 #[derive(Parser)]
 #[command(name = "irohssh")]
-#[command(about = "SSH over iroh tunnels")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
+    target: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -29,9 +27,13 @@ enum Commands {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Commands::Connect { target } => client_mode(target).await,
-        Commands::Server { ssh_port } => server_mode(ssh_port).await,
+    match (cli.command, cli.target) {
+        (Some(Commands::Connect { target }), _) => client_mode(target).await,
+        (Some(Commands::Server { ssh_port }), _) => server_mode(ssh_port).await,
+        (None, Some(target)) => client_mode(target).await,
+        (None, None) => {
+            anyhow::bail!("Please provide a target or use 'connect' subcommand")
+        }
     }
 }
 
