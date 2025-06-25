@@ -52,35 +52,14 @@ async fn server_mode(ssh_port: u16) -> anyhow::Result<()> {
 async fn client_mode(target: String) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&target)?;
 
-    // Start SSH process
-    let mut ssh_process = Command::new("ssh")
-        .arg(format!("{}@dummy", ssh_user))
-        .arg("-o")
-        .arg("StrictHostKeyChecking=no")
-        .arg("-o")
-        .arg("UserKnownHostsFile=/dev/null")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
 
-    let mut ssh_stdin =  ssh_process.stdin.take().unwrap();
-    let mut ssh_stdout =  ssh_process.stdout.take().ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?;
+    let iroh_ssh = IrohSsh::new().accept_incoming(true).build().await?;
 
-    // Create iroh connection
-    let iroh_ssh = IrohSsh::new().accept_incoming(false).build().await?;
-    let (mut iroh_write, mut iroh_read) = iroh_ssh.connect(iroh_node_id).await?.accept_bi().await?;
+    let mut ssh_process = iroh_ssh.connect(&ssh_user, iroh_node_id).await?;
 
+    ssh_process.wait().await?;
 
-    tokio::spawn(async move {
-        let a_to_b = async move { tokio::io::copy(&mut iroh_read, &mut ssh_stdin).await };
-        let b_to_a = async move { tokio::io::copy(&mut ssh_stdout, &mut iroh_write).await };
-
-        tokio::select! {
-            result = a_to_b => { let _ = result; },
-            result = b_to_a => { let _ = result; },
-        };
-    });
+    
     Ok(())
 }
 
