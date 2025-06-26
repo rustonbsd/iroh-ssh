@@ -102,6 +102,10 @@ WantedBy=multi-user.target
             .arg("enable")
             .arg("iroh-ssh-server.service")
             .output().await?;
+        Command::new("systemctl")
+            .arg("start")
+            .arg("iroh-ssh-server.service")
+            .output().await?;
     }
 
     Ok(())
