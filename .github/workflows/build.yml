@@ -2,9 +2,9 @@ name: Build musl binary
 
 on:
   push:
-    branches: [main, master]
+    branches: [rc]
   pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
