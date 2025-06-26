@@ -62,6 +62,8 @@ impl Builder {
             .discovery_n0()
             .bind()
             .await?;
+        
+        wait_for_relay(&endpoint).await?;
 
         let mut iroh_ssh = IrohSsh {
             public_key: endpoint.node_id().as_bytes().clone(),
@@ -277,3 +279,9 @@ pub fn dot_ssh(default_secret_key: &SecretKey) -> anyhow::Result<SecretKey> {
     Ok(key)
 }
     
+async fn wait_for_relay(endpoint: &Endpoint) -> anyhow::Result<()> {
+    while endpoint.home_relay().get().is_err() {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    Ok(())
+}

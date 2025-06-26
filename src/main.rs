@@ -50,7 +50,7 @@ async fn info_mode() -> anyhow::Result<()> {
     let node_id = key.public();
     println!("Your iroh-ssh nodeid: {}", node_id.to_string());
 
-    println!("iroh-ssh version 0.1.4");
+    println!("iroh-ssh version 0.2.0");
     println!("https://github.com/rustonbsd/iroh-ssh");
     println!("");
     println!("run 'iroh-ssh server' to start the server");
@@ -102,6 +102,10 @@ WantedBy=multi-user.target
             .arg("enable")
             .arg("iroh-ssh-server.service")
             .output().await?;
+        Command::new("systemctl")
+            .arg("start")
+            .arg("iroh-ssh-server.service")
+            .output().await?;
     }
 
     Ok(())
@@ -131,7 +135,7 @@ async fn server_mode(ssh_port: u16) -> anyhow::Result<()> {
 
 async fn client_mode(target: String) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&target)?;
-    let iroh_ssh = IrohSsh::new().accept_incoming(true).build().await?;
+    let iroh_ssh = IrohSsh::new().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh.connect(&ssh_user, iroh_node_id).await?;
 
     ssh_process.wait().await?;

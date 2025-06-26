@@ -58,7 +58,7 @@ Display its Node ID and share it to allow connection
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.1.4
+    iroh-ssh version 0.2.0
     https://github.com/rustonbsd/iroh-ssh
 
     run 'iroh-ssh server' to start the server
@@ -111,7 +111,7 @@ Download the binary for your operating system from [GitHub Releases](https://git
 Linux
 ```bash 
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 
@@ -121,7 +121,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 
@@ -131,7 +131,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"

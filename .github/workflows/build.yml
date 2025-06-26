@@ -1,0 +1,46 @@
+name: Build musl binary
+
+on:
+  push:
+    branches: [rc]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-musl:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build with musl
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workdir \
+          -v ~/.cargo/git:/root/.cargo/git \
+          -v ~/.cargo/registry:/root/.cargo/registry \
+          registry.gitlab.com/rust_musl_docker/image:stable-latest \
+          cargo build --release --target=x86_64-unknown-linux-musl
+    
+    - name: Prepare binary
+      run: |
+        cp target/x86_64-unknown-linux-musl/release/iroh-ssh ./iroh-ssh-musl
+        chmod +x ./iroh-ssh-musl
+        ls -la ./iroh-ssh-musl
+    
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: iroh-ssh-musl-binary
+        path: ./iroh-ssh-musl
+        retention-days: 30
+
+    - name: Create release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ./iroh-ssh-musl
+        name: Release ${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
