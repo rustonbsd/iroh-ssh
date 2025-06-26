@@ -122,8 +122,8 @@ macOS
 ```bash
 # macOS arm
 wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.macos
-chmod +x iroh-ssh.macos.arm
-sudo mv iroh-ssh.macos.arm /usr/local/bin/iroh-ssh
+chmod +x iroh-ssh.macos
+sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 
 # restart your terminal after!
 ```

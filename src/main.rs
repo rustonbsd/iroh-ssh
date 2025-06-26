@@ -50,7 +50,7 @@ async fn info_mode() -> anyhow::Result<()> {
     let node_id = key.public();
     println!("Your iroh-ssh nodeid: {}", node_id.to_string());
 
-    println!("iroh-ssh version 0.1.3");
+    println!("iroh-ssh version 0.1.4");
     println!("https://github.com/rustonbsd/iroh-ssh");
     println!("");
     println!("run 'iroh-ssh server' to start the server");
@@ -114,8 +114,8 @@ async fn server_mode(ssh_port: u16) -> anyhow::Result<()> {
         .dot_ssh_integration()
         .build()
         .await?;
-    println!("Connect to this this machine:\n\n");
-    println!("\niroh-ssh root@{}\n\n", iroh_ssh.node_id());
+    println!("Connect to this this machine:");
+    println!("\niroh-ssh root@{}\n", iroh_ssh.node_id());
     println!("where root is the username you want to connect to.");
     println!("");
     println!(
