@@ -1,65 +1,134 @@
 # iroh-ssh
 
-SSH over Iroh.
+[![Crates.io](https://img.shields.io/crates/v/iroh-ssh.svg)](https://crates.io/crates/iroh-ssh)
+[![Documentation](https://docs.rs/iroh-ssh/badge.svg)](https://docs.rs/iroh-ssh)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-## Description
+**SSH to any machine behind NAT/firewall without port forwarding or VPN setup.**
 
-Use [Iroh](https://iroh.computer/) node_id even behind NAT firewall to connect to a remote SSH server.
-
-## Quick Start
-
-Download from releases or ``cargo install iroh-ssh``.
-
-On your server you run:
-    
-    iroh-ssh server
-
-On your client you run:
-    
-    iroh-ssh user@<NODE_ID>
-
-## ToDo's
-
-- [x] add ssh basic password login
-- [ ] add -i support for certificates
-- [ ] decide what other ssh native features to support
-
-## More Details
-`iroh-ssh` operates in two modes: a `server` mode for the machine you want to access, and a client mode for the machine you are connecting from.
-
-### 1. On the remote machine (the one you want to connect *to*)
-
-Start the server. It will listen for incoming Iroh connections and forward them to the local SSH server (`sshd`).
-
-```sh
-# Start the server, forwarding to the local SSH port 22
-iroh-ssh server
-
-# The server will print its Iroh nodeid. Copy this ID.
-# Node ID: [your-node-id-will-be-here]
+```bash
+iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
 
-You can optionally specify a different SSH port: `iroh-ssh server --ssh-port 2222`.
+**That's all it takes.**
 
-### 2. On your local machine (the one you want to connect *from*)
+---
 
-Use the `nodeid` from the server to open a connection.
+## Server Setup
 
-```sh
-# Paste the ssh user and nodeid from the server
+*GIF placeholder: Installing and starting iroh-ssh service*
+
+```bash
+# Install (example ubuntu 24.04)
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.linux
+chmod +x iroh-ssh.linux
+sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
+
+# Start service (runs in background)
+iroh-ssh service
+```
+
+Display its Node ID and share it to allow connection
+
+```bash
+iroh-ssh info
+```
+
+---
+
+## Client Connection  
+
+*GIF placeholder: Connecting to remote server*
+
+```bash
+# Connect from anywhere
 iroh-ssh user@<NODE_ID>
 ```
 
+Works through any firewall, NAT, or private network. No configuration needed.
+
+---
+
 ## How It Works
 
-1.  **`iroh-ssh server`**: Starts an Iroh node, prints its unique `nodeid`, and listens for connections. For each incoming Iroh stream, it opens a corresponding TCP connection to the local `sshd` and proxies all data between them.
-2.  **`iroh-ssh <NODE_ID>`**: Starts a local TCP listener. Runs your local `ssh` client and connects it to the TCP listener, `iroh-ssh` opens a stream to the target `nodeid` over the Iroh network and proxies data between your local `ssh` client and the remote `sshd`.
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────────┐    ┌─────────────┐
+│ iroh-ssh    │───▶│ system SSH   │───▶│ QUIC Tunnel     │───▶│ iroh-ssh    │
+│ (your machine)   │ TCP Listener │    │ (P2P Network)   │    │ server      │
+└─────────────┘    | (your machine)    └─────────────────┘    └─────────────┘
+                   └──────────────┘
+                           │                                           │
+                           ▼                                           ▼
+                   ┌──────────────┐                            ┌─────────────┐
+                   │ localhost:   │                            │ SSH Server  │
+                   │ random_port  │                            │ (port 22)   │
+                   └──────────────┘                            └─────────────┘
+```
 
-This creates a secure end-to-end tunnel, with Iroh handling peer discovery and NAT traversal.
+1. **Client**: Creates local TCP listener, connects system SSH client to it
+2. **Tunnel**: QUIC connection through Iroh's P2P network (automatic NAT traversal)  
+3. **Server**: Proxies connections to local SSH daemon running on (e.g. port localhost:22) (requires ssh server)
+4. **Authentication**: Standard SSH security applies end-to-end. The tunnel is ontop of that an encrypted QUIC connection.
+
+## Use Cases
+
+- **Remote servers**: Access cloud instances without exposing SSH ports
+- **Home networks**: Connect to devices behind router/firewall
+- **Corporate networks**: Bypass restrictive network policies
+- **IoT devices**: SSH to embedded systems on private networks
+- **Development**: Access staging servers and build machines
+
+## Installation
+
+Download the binary for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
+
+```bash
+# Ubuntu/Debian
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.linux
+chmod +x iroh-ssh.linux
+sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
+
+# macOS arm
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.macos.arm
+chmod +x iroh-ssh.macos.arm
+sudo mv iroh-ssh.macos.arm /usr/local/bin/iroh-ssh
+
+# Or compile from source (rust.up required)
+cargo install iroh-ssh
+```
+
+## Commands
+
+```bash
+# Get your Node ID and info
+iroh-ssh info
+
+# Server modes
+iroh-ssh server                    # Interactive mode, e.g. use tmux (default SSH port 22)
+iroh-ssh server --ssh-port 2222    # Custom SSH port
+iroh-ssh service                   # Background daemon (Linux only, default port 22)
+iroh-ssh service --ssh-port 2222   # Background daemon with custom SSH port
+
+# Client connection
+iroh-ssh user@<NODE_ID>            # Connect to remote server
+iroh-ssh connect user@<NODE_ID>    # Explicit connect command
+```
+
+## Security Model
+
+- **Node ID access**: Anyone with the Node ID can reach your SSH port
+- **SSH authentication**: ATM only password auth is supported
+- **Persistent keys**: Uses dedicated `.ssh/iroh_ssh_ed25519` keypair
+- **QUIC encryption**: Transport layer encryption between endpoints
+
+## Status
+
+- [x] Password authentication
+- [x] Persistent SSH keys  
+- [x] Linux service mode
+- [ ] Certificate support (`-i` flag)
+- [ ] Additional SSH features
 
 ## License
 
-Licensed under either of
-* Apache License, Version 2.0
-* MIT license
-at your option.
+Licensed under either of Apache License 2.0 or MIT license at your option.

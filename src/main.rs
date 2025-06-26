@@ -47,6 +47,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn info_mode() -> anyhow::Result<()> {
     let key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng))?;
+    let node_id = key.public();
+    println!("Your iroh-ssh nodeid: {}", node_id.to_string());
 
     println!("iroh-ssh version 0.1.3");
     println!("https://github.com/rustonbsd/iroh-ssh");
