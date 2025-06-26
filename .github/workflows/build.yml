@@ -1,6 +1,6 @@
 name: Rust MUSL Build
 
-on: [workflow_dispatch]
+on: [push]
 
 env:
   CARGO_REGISTRY_DIR: ~/.cargo/registry
