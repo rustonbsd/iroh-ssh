@@ -50,7 +50,7 @@ async fn info_mode() -> anyhow::Result<()> {
     let node_id = key.public();
     println!("Your iroh-ssh nodeid: {}", node_id.to_string());
 
-    println!("iroh-ssh version 0.1.4");
+    println!("iroh-ssh version 0.2.0");
     println!("https://github.com/rustonbsd/iroh-ssh");
     println!("");
     println!("run 'iroh-ssh server' to start the server");
