@@ -3,6 +3,8 @@ mod ssh;
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use iroh::{protocol::Router, Endpoint};
 
+pub use ssh::dot_ssh;
+
 
 #[derive(Debug, Clone)]
 pub struct IrohSsh {

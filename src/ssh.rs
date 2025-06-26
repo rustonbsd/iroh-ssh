@@ -20,6 +20,8 @@ use tokio::{
     net::{TcpListener, TcpStream},
     process::{Child, Command},
 };
+use homedir::my_home;
+
 
 impl Builder {
     pub fn new() -> Self {
@@ -42,6 +44,13 @@ impl Builder {
 
     pub fn secret_key(mut self, secret_key: &[u8; SECRET_KEY_LENGTH]) -> Self {
         self.secret_key = *secret_key;
+        self
+    }
+
+    pub fn dot_ssh_integration(mut self) -> Self {
+        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key)) {
+            self.secret_key = secret_key.to_bytes();
+        }
         self
     }
 
@@ -241,3 +250,30 @@ impl ProtocolHandler for IrohSsh {
         })
     }
 }
+
+pub fn dot_ssh(default_secret_key: &SecretKey) -> anyhow::Result<SecretKey> {
+    let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+    let ssh_dir = distro_home.join(".ssh");
+    let pub_key = ssh_dir.join("irohssh_ed25519.pub");
+    let priv_key = ssh_dir.join("irohssh_ed25519");
+
+    // check pub and priv key already exists
+    if pub_key.exists() && priv_key.exists() {
+        // read secret key
+        if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+            let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
+            sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
+            return Ok(SecretKey::from_bytes(&sk_bytes));
+        }
+    }
+    
+    let key = default_secret_key.clone();
+    let secret_key = key.secret();
+    let public_key = key.public();
+
+    std::fs::write(pub_key, z32::encode(public_key.as_bytes()))?;
+    std::fs::write(priv_key, z32::encode(secret_key.as_bytes()))?;
+
+    Ok(key)
+}
+    

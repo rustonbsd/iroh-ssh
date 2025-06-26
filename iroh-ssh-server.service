@@ -1,0 +1,12 @@
+[Unit]
+Description=SSH over Iroh
+
+[Service]
+Type=simple
+WorkingDirectory=~
+ExecStart=/bin/bash -c 'iroh-ssh server --ssh-port [SSHPORT]'
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
