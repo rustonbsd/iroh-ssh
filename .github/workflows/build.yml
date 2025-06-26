@@ -1,46 +1,46 @@
-name: Rust MUSL Build
+name: Build musl binary
 
-on: [workflow_dispatch]
-
-env:
-  CARGO_REGISTRY_DIR: ~/.cargo/registry
-  CARGO_GIT_DIR: ~/.cargo/git
-  TARGET: x86_64-unknown-linux-musl
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build for ${{ env.TARGET }}
+  build-musl:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    
+    - name: Build with musl
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/workdir \
+          -v ~/.cargo/git:/root/.cargo/git \
+          -v ~/.cargo/registry:/root/.cargo/registry \
+          registry.gitlab.com/rust_musl_docker/image:stable-latest \
+          cargo build --release --target=x86_64-unknown-linux-musl
+    
+    - name: Prepare binary
+      run: |
+        cp target/x86_64-unknown-linux-musl/release/iroh-ssh ./iroh-ssh-musl
+        chmod +x ./iroh-ssh-musl
+        ls -la ./iroh-ssh-musl
+    
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: iroh-ssh-musl-binary
+        path: ./iroh-ssh-musl
+        retention-days: 30
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rust-src, rustfmt, clippy
-
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        with:
-          path: |
-            ${{ env.CARGO_REGISTRY_DIR }}
-            ${{ env.CARGO_GIT_DIR }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install MUSL target
-        run: rustup target add ${{ env.TARGET }}
-
-      - name: Install MUSL dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools musl-dev
-          sudo ln -sf /usr/include/x86_64-linux-musl/openssl/opensslconf.h /usr/include/openssl/
-
-      - name: Build with OpenSSL configuration
-        run: cargo build --release --target=${{ env.TARGET }}
-        env:
-          OPENSSL_NO_VENDOR: 1
-          OPENSSL_DIR: /usr/include/x86_64-linux-musl/
-          OPENSSL_STATIC: 1
-          CC: musl-gcc
+    - name: Create release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ./iroh-ssh-musl
+        name: Release ${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
