@@ -55,7 +55,7 @@ async fn info_mode() -> anyhow::Result<()> {
     println!("run 'iroh-ssh service' to start the server as a service");
     println!("");
     println!("Your iroh-ssh nodeid:");
-    println!("  iroh-ssh root@{}\n\n", z32::encode(key.public().as_bytes()));
+    println!("  iroh-ssh root@{}\n\n", key.public().to_string());
     Ok(())
 }
 
