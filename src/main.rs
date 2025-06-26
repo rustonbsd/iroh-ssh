@@ -97,7 +97,7 @@ WantedBy=multi-user.target
     } else {
         println!("Starting service...");
         Command::new("systemctl")
-            .arg("start")
+            .arg("enable")
             .arg("iroh-ssh-server.service")
             .output().await?;
     }
