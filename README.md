@@ -7,10 +7,23 @@
 **SSH to any machine behind NAT/firewall without port forwarding or VPN setup.**
 
 ```bash
-iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
 
-**That's all it takes.**
+**That's all it takes.** (requires ssh/(an ssh server) to be installed)
+
+---
+## Client Connection  
+
+*GIF placeholder: Connecting to remote server*
+
+```bash
+# Install for your distro (see below)
+# Connect from anywhere
+> iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+```
+
+Works through any firewall, NAT, or private network. No configuration needed.
 
 ---
 
@@ -19,35 +32,48 @@ iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 *GIF placeholder: Installing and starting iroh-ssh service*
 
 ```bash
-# Install (example ubuntu 24.04)
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.linux
-chmod +x iroh-ssh.linux
-sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
+# Install for your distro (see below)
+# (use with tmux or install as service on linux)
 
-# Start service (runs in background)
-iroh-ssh service
+> iroh-ssh server
+
+    Connect to this this machine:
+
+    iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+
+    where root is the username you want to connect to.
+
+    Server listening for iroh connections...
+    client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :22
+    Waiting for incoming connections...
+    Press Ctrl+C to exit
+
 ```
+
+```bash```
 
 Display its Node ID and share it to allow connection
 
 ```bash
-iroh-ssh info
+> iroh-ssh info
+
+    Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+    iroh-ssh version 0.1.4
+    https://github.com/rustonbsd/iroh-ssh
+
+    run 'iroh-ssh server' to start the server
+    run 'iroh-ssh service' to start the server as a service
+
+    Your iroh-ssh nodeid:
+    iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+
+
+
 ```
 
 ---
 
-## Client Connection  
 
-*GIF placeholder: Connecting to remote server*
-
-```bash
-# Connect from anywhere
-iroh-ssh user@<NODE_ID>
-```
-
-Works through any firewall, NAT, or private network. No configuration needed.
-
----
 
 ## How It Works
 
@@ -82,36 +108,58 @@ Works through any firewall, NAT, or private network. No configuration needed.
 
 Download the binary for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
 
-```bash
-# Ubuntu/Debian
+Linux
+```bash 
+# Linux
 wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 
+# restart your terminal after!
+```
+
+macOS
+```bash
 # macOS arm
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.macos.arm
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.macos
 chmod +x iroh-ssh.macos.arm
 sudo mv iroh-ssh.macos.arm /usr/local/bin/iroh-ssh
 
-# Or compile from source (rust.up required)
-cargo install iroh-ssh
+# restart your terminal after!
+```
+
+Windows
+```bash
+# Windows x86 64bit
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.1.4/iroh-ssh.exe
+mkdir %LOCALAPPDATA%\iroh-ssh
+move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
+setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
+
+# restart your terminal after!
+```
+
+Verify that it works
+```bash
+# restart your terminal first
+> iroh-ssh --help
 ```
 
 ## Commands
 
 ```bash
 # Get your Node ID and info
-iroh-ssh info
+> iroh-ssh info
 
 # Server modes
-iroh-ssh server                    # Interactive mode, e.g. use tmux (default SSH port 22)
-iroh-ssh server --ssh-port 2222    # Custom SSH port
-iroh-ssh service                   # Background daemon (Linux only, default port 22)
-iroh-ssh service --ssh-port 2222   # Background daemon with custom SSH port
+> iroh-ssh server                    # Interactive mode, e.g. use tmux (default SSH port 22)
+> iroh-ssh server --ssh-port 2222    # Custom SSH port
+> iroh-ssh service                   # Background daemon (Linux only, default port 22)
+> iroh-ssh service --ssh-port 2222   # Background daemon with custom SSH port
 
 # Client connection
-iroh-ssh user@<NODE_ID>            # Connect to remote server
-iroh-ssh connect user@<NODE_ID>    # Explicit connect command
+> iroh-ssh user@<NODE_ID>            # Connect to remote server
+> iroh-ssh connect user@<NODE_ID>    # Explicit connect command
 ```
 
 ## Security Model
