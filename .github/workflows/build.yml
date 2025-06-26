@@ -1,0 +1,50 @@
+name: Rust MUSL Build
+
+on:
+  pull_request:
+    branches: [ release ]
+  workflow_dispatch:
+  
+
+env:
+  CARGO_REGISTRY_DIR: ~/.cargo/registry
+  CARGO_GIT_DIR: ~/.cargo/git
+  TARGET: x86_64-unknown-linux-musl
+
+jobs:
+  build:
+    name: Build for ${{ env.TARGET }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-src, rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.CARGO_REGISTRY_DIR }}
+            ${{ env.CARGO_GIT_DIR }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install MUSL target
+        run: rustup target add ${{ env.TARGET }}
+
+      - name: Install MUSL dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev
+          sudo ln -sf /usr/include/x86_64-linux-musl/openssl/opensslconf.h /usr/include/openssl/
+
+      - name: Build with OpenSSL configuration
+        run: cargo build --release --target=${{ env.TARGET }}
+        env:
+          OPENSSL_NO_VENDOR: 1
+          OPENSSL_DIR: /usr/include/x86_64-linux-musl/
+          OPENSSL_STATIC: 1
+          CC: musl-gcc
