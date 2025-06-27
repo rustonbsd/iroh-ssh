@@ -15,8 +15,6 @@ iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ---
 ## Client Connection  
 
-*GIF placeholder: Connecting to remote server*
-
 ```bash
 # Install for your distro (see below)
 # Connect from anywhere
@@ -25,11 +23,12 @@ iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 
 Works through any firewall, NAT, or private network. No configuration needed.
 
+![Connecting to remote server](/media/t-rec_connect.gif)
+
+
 ---
 
 ## Server Setup
-
-*GIF placeholder: Installing and starting iroh-ssh service*
 
 ```bash
 # Install for your distro (see below)
@@ -50,9 +49,10 @@ Works through any firewall, NAT, or private network. No configuration needed.
 
 ```
 
-```bash```
-
 Display its Node ID and share it to allow connection
+
+![Starting server/Installing as service](/media/t-rec_server_service.gif)
+
 
 ```bash
 > iroh-ssh info
