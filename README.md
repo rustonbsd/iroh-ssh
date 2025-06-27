@@ -174,7 +174,7 @@ Verify that it works
 - [x] Password authentication
 - [x] Persistent SSH keys  
 - [x] Linux service mode
-- [ ] Add howto gifs
+- [x] Add howto gifs
 - [ ] Certificate support (`-i` flag)
 - [ ] Additional SSH features
 
