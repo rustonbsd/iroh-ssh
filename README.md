@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/iroh-ssh/badge.svg)](https://docs.rs/iroh-ssh)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-**SSH to any machine behind NAT/firewall without port forwarding or VPN setup.**
+**SSH to any machine without ip, behind a NAT/firewall without port forwarding or VPN setup.**
 
 ```bash
 iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
