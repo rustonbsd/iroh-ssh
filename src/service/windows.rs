@@ -1,42 +1,24 @@
 use crate::ServiceParams;
-use windows_service::
 
-
-//#[cfg(target_os = "windows")]
+#[cfg(target_os = "windows")]
 pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
-    use std::ffi::OsString;
-    use windows_service::{
-        service::{ServiceAccess, ServiceErrorControl, ServiceInfo, ServiceStartType, ServiceType},
-        service_manager::{ServiceManager, ServiceManagerAccess},
-    };
-
-
-    Ok(())
+    let _ = service::run();
+    todo!()
 }
 
 #[cfg(windows)]
-fn main() -> windows_service::Result<()> {
-    service::run()
-}
-
-#[cfg(not(windows))]
-fn main() {
-    panic!("This program is only intended to run on Windows.");
-}
-
-//#[cfg(windows)]
 mod service {
     use std::{
         ffi::OsString,
-        net::{IpAddr, SocketAddr, UdpSocket},
-        sync::mpsc,
-        time::Duration,
+        sync::mpsc, time::Duration,
     };
+
+    use windows_service::{define_windows_service, service::{ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType}, service_control_handler::{self, ServiceControlHandlerResult}, service_dispatcher};
 
     const SERVICE_NAME: &str = "iroh-ssh";
     const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
 
-    pub fn run() -> windows_service::windows::Result<()> {
+    pub fn run() -> windows_service::Result<()> {
         // Register generated `ffi_service_main` with the system and start the service, blocking
         // this thread until the service is stopped.
         service_dispatcher::start(SERVICE_NAME, ffi_service_main)
@@ -57,7 +39,7 @@ mod service {
         }
     }
 
-    pub fn run_service() -> Result<()> {
+    pub fn run_service() -> windows_service::Result<()> {
         // Create a channel to be able to poll a stop event from the service worker loop.
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
@@ -102,7 +84,7 @@ mod service {
         })?;
 
         // Poll shutdown event.
-        shutdown_rx.recv()?;
+        let _ = shutdown_rx.recv();
         println!("Shutting down...");
 
         // Tell the system that service has stopped.
