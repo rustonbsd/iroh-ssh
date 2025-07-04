@@ -10,7 +10,9 @@ macro_rules! ok_or_continue {
 use crate::{Builder, Inner, IrohSsh};
 use std::{pin::Pin, process::Stdio};
 
+use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
+use homedir::my_home;
 use iroh::{
     Endpoint, NodeId, SecretKey,
     endpoint::Connection,
@@ -20,8 +22,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     process::{Child, Command},
 };
-use homedir::my_home;
-
 
 impl Builder {
     pub fn new() -> Self {
@@ -47,8 +47,8 @@ impl Builder {
         self
     }
 
-    pub fn dot_ssh_integration(mut self) -> Self {
-        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key)) {
+    pub fn dot_ssh_integration(mut self, persist: bool) -> Self {
+        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist) {
             self.secret_key = secret_key.to_bytes();
         }
         self
@@ -62,7 +62,7 @@ impl Builder {
             .discovery_n0()
             .bind()
             .await?;
-        
+
         wait_for_relay(&endpoint).await?;
 
         let mut iroh_ssh = IrohSsh {
@@ -253,32 +253,57 @@ impl ProtocolHandler for IrohSsh {
     }
 }
 
-pub fn dot_ssh(default_secret_key: &SecretKey) -> anyhow::Result<SecretKey> {
+pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     let ssh_dir = distro_home.join(".ssh");
     let pub_key = ssh_dir.join("irohssh_ed25519.pub");
     let priv_key = ssh_dir.join("irohssh_ed25519");
 
-    // check pub and priv key already exists
-    if pub_key.exists() && priv_key.exists() {
-        // read secret key
-        if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
-            let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
-            sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
-            return Ok(SecretKey::from_bytes(&sk_bytes));
+    match (ssh_dir.exists(), persist) {
+        (false, false) => {
+            bail!("no .ssh folder found in {}, use --persist flag to create it", distro_home.display())
+        }
+        (false, true) => {
+            std::fs::create_dir_all(&ssh_dir)?;
+            println!("[INFO] created .ssh folder: {}", ssh_dir.display());
+            dot_ssh(default_secret_key, persist)
+        }
+        (true, true) => {
+            // check pub and priv key already exists
+            if pub_key.exists() && priv_key.exists() {
+                // read secret key
+                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                    let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
+                    sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
+                    Ok(SecretKey::from_bytes(&sk_bytes))
+                } else {
+                    bail!("failed to read secret key from {}", priv_key.display())
+                }
+            } else {
+                let key = default_secret_key.clone();
+                let secret_key = key.secret();
+                let public_key = key.public();
+
+                std::fs::write(pub_key, z32::encode(public_key.as_bytes()))?;
+                std::fs::write(priv_key, z32::encode(secret_key.as_bytes()))?;
+                Ok(key)
+            }
+        }
+        (true, false) => {
+            // check pub and priv key already exists
+            if pub_key.exists() && priv_key.exists() {
+                // read secret key
+                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                    let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
+                    sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
+                    return Ok(SecretKey::from_bytes(&sk_bytes));
+                }
+            }
+            bail!("no iroh-ssh keys found in {}, use --persist flag to create it", ssh_dir.display())
         }
     }
-    
-    let key = default_secret_key.clone();
-    let secret_key = key.secret();
-    let public_key = key.public();
-
-    std::fs::write(pub_key, z32::encode(public_key.as_bytes()))?;
-    std::fs::write(priv_key, z32::encode(secret_key.as_bytes()))?;
-
-    Ok(key)
 }
-    
+
 async fn wait_for_relay(endpoint: &Endpoint) -> anyhow::Result<()> {
     while endpoint.home_relay().get().is_err() {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
