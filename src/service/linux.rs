@@ -1,6 +1,10 @@
+use tokio::process::Command;
+
+use crate::ServiceParams;
+
 
 #[cfg(target_os = "linux")]
-pub fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
+pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
     let service_raw = r#"[Unit]
 Description=SSH over Iroh
 
@@ -15,7 +19,7 @@ RestartSec=3s
 WantedBy=multi-user.target
 "#;
 
-    let service_raw = service_raw.replace("[SSHPORT]", &ssh_port.to_string());
+    let service_raw = service_raw.replace("[SSHPORT]", &service_params.ssh_port.to_string());
 
     let service_path = std::path::Path::new("/etc/systemd/system/iroh-ssh-server.service");
     std::fs::write(service_path, service_raw)?;

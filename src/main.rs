@@ -84,7 +84,7 @@ async fn info_mode() -> anyhow::Result<()> {
 }
 
 async fn service_mode(ssh_port: u16) -> anyhow::Result<()> {
-    if install_service(ServiceParams { ssh_port }).is_err() {
+    if install_service(ServiceParams { ssh_port }).await.is_err() {
         println!("Service mode is only supported on linux");
     }
     Ok(())
