@@ -18,7 +18,7 @@ iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```bash
 # Install for your distro (see below)
 # Connect from anywhere
-> iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+> iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
 
 Works through any firewall, NAT, or private network. No configuration needed.
@@ -34,13 +34,13 @@ Works through any firewall, NAT, or private network. No configuration needed.
 # Install for your distro (see below)
 # (use with tmux or install as service on linux)
 
-> iroh-ssh server
+> iroh-ssh server --persist
 
     Connect to this this machine:
 
-    iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+    iroh-ssh my-user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
 
-    where root is the username you want to connect to.
+    (using persistent keys in ~/.ssh/irohssh_ed25519)
 
     Server listening for iroh connections...
     client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :22
@@ -49,26 +49,47 @@ Works through any firewall, NAT, or private network. No configuration needed.
 
 ```
 
+or use ephemeral keys
+
+```bash
+# Install for your distro (see below)
+# (use with tmux or install as service on linux)
+
+> iroh-ssh server
+
+    Connect to this this machine:
+
+    iroh-ssh my-user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
+
+    warning: (using ephemeral keys, run 'iroh-ssh server --persist' to create persistent keys)
+
+    client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :22
+    Waiting for incoming connections...
+    Press Ctrl+C to exit
+    Server listening for iroh connections...
+
+```
+
 Display its Node ID and share it to allow connection
 
 ![Starting server/Installing as service](/media/t-rec_server_service.gif)
 
 
+## Connection information
 ```bash
+// note: works only with persistent keys 
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.0
+    iroh-ssh version 0.2.1
     https://github.com/rustonbsd/iroh-ssh
 
-    run 'iroh-ssh server' to start the server
-    run 'iroh-ssh service' to start the server as a service
+    run 'iroh-ssh server --persist' to start the server with persistent keys
+    run 'iroh-ssh server' to start the server with ephemeral keys
+    run 'iroh-ssh service' to start the server as a service (always uses persistent keys)
 
     Your iroh-ssh nodeid:
     iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-
-
-
 ```
 
 ---
@@ -111,7 +132,7 @@ Download the binary for your operating system from [GitHub Releases](https://git
 Linux
 ```bash 
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 
@@ -121,7 +142,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 
@@ -131,7 +152,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.0/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -175,6 +196,7 @@ Verify that it works
 - [x] Persistent SSH keys  
 - [x] Linux service mode
 - [x] Add howto gifs
+- [x] Add -p flag for persistence
 - [ ] Certificate support (`-i` flag)
 - [ ] Additional SSH features
 
