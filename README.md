@@ -173,8 +173,8 @@ Verify that it works
 > iroh-ssh info
 
 # Server modes
-> iroh-ssh server                    # Interactive mode, e.g. use tmux (default SSH port 22)
-> iroh-ssh server --ssh-port 2222    # Custom SSH port
+> iroh-ssh server --persist          # Interactive mode, e.g. use tmux (default SSH port 22)
+> iroh-ssh server --ssh-port 2222    # Custom SSH port (using ephemeral keys)
 > iroh-ssh service                   # Background daemon (Linux only, default port 22)
 > iroh-ssh service --ssh-port 2222   # Background daemon with custom SSH port
 
