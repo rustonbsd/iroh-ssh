@@ -1,5 +1,6 @@
 mod ssh;
 mod service;
+pub mod api;
 
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use iroh::{protocol::Router, Endpoint};
