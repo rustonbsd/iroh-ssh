@@ -1,103 +1,135 @@
 use crate::ServiceParams;
 
 #[cfg(target_os = "windows")]
-pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
-    let _ = service::run();
-    todo!()
+pub async fn install_service(params: ServiceParams) -> anyhow::Result<()> {
+    service::install(params)?;
+
+    Ok(())
 }
 
 #[cfg(windows)]
 mod service {
-    use std::{
-        ffi::OsString,
-        sync::mpsc, time::Duration,
-    };
 
-    use windows_service::{define_windows_service, service::{ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType}, service_control_handler::{self, ServiceControlHandlerResult}, service_dispatcher};
+    use crate::ServiceParams;
+    use std::{io::Write as _, process::Command};
+
+    use anyhow::Context;
 
     const SERVICE_NAME: &str = "iroh-ssh";
-    const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
+    const PROFILE_SERVICE_DIR: &str = "C:\\Windows\\ServiceProfiles\\iroh-ssh";
+    const BINARY_DIR: &str = "C:\\ProgramData\\iroh-ssh";
 
-    pub fn run() -> windows_service::Result<()> {
-        // Register generated `ffi_service_main` with the system and start the service, blocking
-        // this thread until the service is stopped.
-        service_dispatcher::start(SERVICE_NAME, ffi_service_main)
+    const NSSM_BYTES: &[u8] = include_bytes!("../../win/nssm.exe");
+
+    fn init_nssm() -> anyhow::Result<std::path::PathBuf> {
+        let mut temp_exe = tempfile::Builder::new()
+            .prefix("nssm-")
+            .suffix(".exe")
+            .tempfile()?;
+        temp_exe.write_all(NSSM_BYTES)?;
+        temp_exe.flush()?;
+        let path = temp_exe.path().to_path_buf();
+        temp_exe.keep()?;
+
+        
+        Ok(path)
     }
 
-    // Generate the windows service boilerplate.
-    // The boilerplate contains the low-level service entry function (ffi_service_main) that parses
-    // incoming service arguments into Vec<OsString> and passes them to user defined service
-    // entry (my_service_main).
-    define_windows_service!(ffi_service_main, my_service_main);
+    pub fn install(service_params: ServiceParams) -> anyhow::Result<()> {
+        let nssm_path = init_nssm()?;
 
-    // Service entry function which is called on background thread by the system with service
-    // parameters. There is no stdout or stderr at this point so make sure to configure the log
-    // output to file if needed.
-    pub fn my_service_main(_arguments: Vec<OsString>) {
-        if let Err(_e) = run_service() {
-            // Handle the error, by logging or something.
-        }
-    }
+        let profile_ssh_dir = std::path::Path::new(PROFILE_SERVICE_DIR)
+            .join(".ssh");
+        let service_binary_dir = std::path::Path::new(BINARY_DIR);
 
-    pub fn run_service() -> windows_service::Result<()> {
-        // Create a channel to be able to poll a stop event from the service worker loop.
-        let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
-        // Define system service event handler that will be receiving service events.
-        let event_handler = move |control_event| -> ServiceControlHandlerResult {
-            match control_event {
-                // Notifies a service to report its current status information to the service
-                // control manager. Always return NoError even if not implemented.
-                ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
+        std::fs::create_dir_all(&profile_ssh_dir)
+            .with_context(|| format!("Failed to create service directory at {:?}", &profile_ssh_dir))?;
+        std::fs::create_dir_all(&service_binary_dir)
+            .with_context(|| format!("Failed to create binary directory {:?}", &service_binary_dir))?;
 
-                // Handle stop
-                ServiceControl::Stop => {
-                    shutdown_tx.send(()).unwrap();
-                    ServiceControlHandlerResult::NoError
-                }
+        std::fs::copy(std::env::current_exe()?, service_binary_dir.join(format!("{}.exe", SERVICE_NAME)))?;
 
-                // treat the UserEvent as a stop request
-                ServiceControl::UserEvent(code) => {
-                    if code.to_raw() == 130 {
-                        shutdown_tx.send(()).unwrap();
-                    }
-                    ServiceControlHandlerResult::NoError
-                }
+        /*
+        # nssm making a decent Windows service
+        nssm.exe install iroh-ssh C:\ProgramData\iroh-ssh\iroh-ssh.exe
+        nssm.exe set iroh-ssh AppParameters server
+        nssm.exe set iroh-ssh AppDirectory C:\ProgramData\iroh-ssh
+        nssm.exe set iroh-ssh AppExit Default Restart
+        nssm.exe set iroh-ssh AppPriority HIGH_PRIORITY_CLASS
+        nssm.exe set iroh-ssh AppStdout C:\ProgramData\iroh-ssh\iroh-ssh.log
+        nssm.exe set iroh-ssh AppStderr C:\ProgramData\iroh-ssh\iroh-ssh.error.log
+        nssm.exe set iroh-ssh AppTimestampLog 1
+        nssm.exe set iroh-ssh DependOnService :sshd
+        nssm.exe set iroh-ssh Description "SSHD over Iroh"
+        nssm.exe set iroh-ssh DisplayName iroh-ssh
+        
+        nssm.exe set iroh-ssh ObjectName "NT Service\iroh-ssh"
+        nssm.exe set iroh-ssh Start SERVICE_AUTO_START
+        nssm.exe set iroh-ssh Type SERVICE_WIN32_OWN_PROCESS
+         */
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["install", SERVICE_NAME, &format!("{BINARY_DIR}\\{SERVICE_NAME}.exe")]).output());
+        println!("2");
+        println!("Setting AppParameters...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppParameters", &format!("server --persist --ssh-port {}", &service_params.ssh_port)]).output()?);
 
-                _ => ServiceControlHandlerResult::NotImplemented,
-            }
-        };
+        println!("Setting AppDirectory...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppDirectory",  BINARY_DIR]).output()?);
 
-        // Register system service event handler.
-        // The returned status handle should be used to report service status changes to the system.
-        let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
+        println!("Setting AppExit...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppExit", "Default","Restart"]).output()?);
 
-        // Tell the system that service is running
-        status_handle.set_service_status(ServiceStatus {
-            service_type: SERVICE_TYPE,
-            current_state: ServiceState::Running,
-            controls_accepted: ServiceControlAccept::STOP,
-            exit_code: ServiceExitCode::Win32(0),
-            checkpoint: 0,
-            wait_hint: Duration::default(),
-            process_id: None,
-        })?;
+        println!("Setting AppPriority...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppPriority", "HIGH_PRIORITY_CLASS"]).output()?);
 
-        // Poll shutdown event.
-        let _ = shutdown_rx.recv();
-        println!("Shutting down...");
+        println!("Setting AppStdout...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppStdout", &format!("{BINARY_DIR}\\{SERVICE_NAME}.log")]).output()?);
 
-        // Tell the system that service has stopped.
-        status_handle.set_service_status(ServiceStatus {
-            service_type: SERVICE_TYPE,
-            current_state: ServiceState::Stopped,
-            controls_accepted: ServiceControlAccept::empty(),
-            exit_code: ServiceExitCode::Win32(0),
-            checkpoint: 0,
-            wait_hint: Duration::default(),
-            process_id: None,
-        })?;
+        println!("Setting AppStderr...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppStderr", &format!("{BINARY_DIR}\\{SERVICE_NAME}.error.log")]).output()?);
 
+        println!("Setting AppTimestampLog...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppTimestampLog", "1"]).output()?);
+
+        println!("Setting DependOnService...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "DependOnService", ":sshd"]).output()?);
+
+        println!("Setting Description...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Description", "ssh without ip"]).output()?);
+
+        println!("Setting DisplayName...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "DisplayName", SERVICE_NAME]).output()?);
+
+        println!("Setting ObjectName (Service Account)...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "ObjectName", &format!("NT Service\\{SERVICE_NAME}")]).output()?);
+
+        println!("Setting Start...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Start", "SERVICE_AUTO_START"]).output()?);
+
+        println!("Setting Type...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Type", "SERVICE_WIN32_OWN_PROCESS"]).output()?);
+
+        println!("All NSSM configuration commands completed.");
+
+        // Verify the service account configuration
+        println!("Verifying ObjectName configuration...");
+        println!("{:#?}", Command::new(nssm_path.clone()).args(["get", SERVICE_NAME, "ObjectName"]).output()?);
+
+        println!("Starting service...");
+        let start_result = std::process::Command::new("powershell")
+            .args(["-Command", &format!("Start-Service -Name '{}'", SERVICE_NAME)])
+            .output()?;
+        println!("Start-Service output: {:#?}", start_result);
+
+        // Also check service status
+        println!("Checking service status...");
+        let status_result = std::process::Command::new("powershell")
+            .args(["-Command", &format!("Get-Service -Name '{}'", SERVICE_NAME)])
+            .output()?;
+        println!("Get-Service output: {:#?}", status_result);
+
+        println!("Service installation process completed.");
+    
         Ok(())
     }
 }
