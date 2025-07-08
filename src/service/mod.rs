@@ -14,12 +14,12 @@ pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()
     {
         return linux::install_service(service_params).await
     }
-    #[cfg(target_os = "windows")]
+    /*#[cfg(target_os = "windows")]
     {
         let res = windows::install_service(service_params).await;
         println!("{:?}", res);
         return res
-    }
+    }*/
     
     anyhow::bail!("Service mode is only supported on linux")
 }
