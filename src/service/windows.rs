@@ -11,9 +11,10 @@ pub async fn install_service(params: ServiceParams) -> anyhow::Result<()> {
 mod service {
 
     use crate::ServiceParams;
-    use std::{io::Write as _, process::Command};
+    use std::{io::Write as _};
 
     use anyhow::Context;
+    use runas::Command;
 
     const SERVICE_NAME: &str = "iroh-ssh";
     const PROFILE_SERVICE_DIR: &str = "C:\\Windows\\ServiceProfiles\\iroh-ssh";
@@ -37,6 +38,11 @@ mod service {
 
     pub fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         let nssm_path = init_nssm()?;
+
+        if Command::new(&nssm_path).args(&["status", SERVICE_NAME]).gui(false).force_prompt(true).status()?.code() == Some(0) {
+            println!("Service is already installed");
+            return Ok(())
+        }
 
         let profile_ssh_dir = std::path::Path::new(PROFILE_SERVICE_DIR)
             .join(".ssh");
@@ -68,65 +74,63 @@ mod service {
         nssm.exe set iroh-ssh Start SERVICE_AUTO_START
         nssm.exe set iroh-ssh Type SERVICE_WIN32_OWN_PROCESS
          */
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["install", SERVICE_NAME, &format!("{BINARY_DIR}\\{SERVICE_NAME}.exe")]).output());
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["install", SERVICE_NAME, &format!("{BINARY_DIR}\\{SERVICE_NAME}.exe")]).gui(false).force_prompt(true).status()?);
         println!("2");
         println!("Setting AppParameters...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppParameters", &format!("server --persist --ssh-port {}", &service_params.ssh_port)]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppParameters", &format!("server --persist --ssh-port {}", &service_params.ssh_port)]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppDirectory...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppDirectory",  BINARY_DIR]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppDirectory",  BINARY_DIR]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppExit...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppExit", "Default","Restart"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppExit", "Default","Restart"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppPriority...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppPriority", "HIGH_PRIORITY_CLASS"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppPriority", "HIGH_PRIORITY_CLASS"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppStdout...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppStdout", &format!("{BINARY_DIR}\\{SERVICE_NAME}.log")]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppStdout", &format!("{BINARY_DIR}\\{SERVICE_NAME}.log")]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppStderr...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppStderr", &format!("{BINARY_DIR}\\{SERVICE_NAME}.error.log")]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppStderr", &format!("{BINARY_DIR}\\{SERVICE_NAME}.error.log")]).gui(false).force_prompt(true).status()?);
 
         println!("Setting AppTimestampLog...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "AppTimestampLog", "1"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "AppTimestampLog", "1"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting DependOnService...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "DependOnService", ":sshd"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "DependOnService", ":sshd"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting Description...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Description", "ssh without ip"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "Description", "ssh without ip"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting DisplayName...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "DisplayName", SERVICE_NAME]).output()?);
-
-        println!("Setting ObjectName (Service Account)...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "ObjectName", &format!("NT Service\\{SERVICE_NAME}")]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "DisplayName", SERVICE_NAME]).gui(false).force_prompt(true).status()?);
 
         println!("Setting Start...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Start", "SERVICE_AUTO_START"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "Start", "SERVICE_AUTO_START"]).gui(false).force_prompt(true).status()?);
 
         println!("Setting Type...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["set", SERVICE_NAME, "Type", "SERVICE_WIN32_OWN_PROCESS"]).output()?);
+        println!("{:#?}", Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "Type", "SERVICE_WIN32_OWN_PROCESS"]).gui(false).force_prompt(true).status()?);
 
         println!("All NSSM configuration commands completed.");
 
-        // Verify the service account configuration
-        println!("Verifying ObjectName configuration...");
-        println!("{:#?}", Command::new(nssm_path.clone()).args(["get", SERVICE_NAME, "ObjectName"]).output()?);
-
         println!("Starting service...");
-        let start_result = std::process::Command::new("powershell")
-            .args(["-Command", &format!("Start-Service -Name '{}'", SERVICE_NAME)])
-            .output()?;
+        let start_result = Command::new("powershell")
+            .args(&["-Command", &format!("Start-Service -Name '{}'", SERVICE_NAME)])
+            .gui(false).force_prompt(true).status()?;
         println!("Start-Service output: {:#?}", start_result);
 
         // Also check service status
         println!("Checking service status...");
-        let status_result = std::process::Command::new("powershell")
-            .args(["-Command", &format!("Get-Service -Name '{}'", SERVICE_NAME)])
-            .output()?;
+        let status_result = Command::new("powershell")
+            .args(&["-Command", &format!("Get-Service -Name '{}'", SERVICE_NAME)])
+            .gui(false).force_prompt(true).status()?;
         println!("Get-Service output: {:#?}", status_result);
+
+        
+        println!("Setting ObjectName (Service Account)...");
+        println!("{:#?}", std::process::Command::new(nssm_path.clone()).args(&["set", SERVICE_NAME, "ObjectName", &format!("NT SERVICE\\{SERVICE_NAME}")]).output()?);
+
 
         println!("Service installation process completed.");
     
