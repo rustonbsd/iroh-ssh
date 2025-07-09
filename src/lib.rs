@@ -8,6 +8,7 @@ use iroh::{protocol::Router, Endpoint};
 pub use ssh::dot_ssh;
 pub use service::install_service;
 pub use service::ServiceParams;
+pub use service::Service;
 
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,7 @@
 use std::str::FromStr as _;
 
 use anyhow::bail;
+use homedir::my_home;
 use iroh::{NodeId, SecretKey};
 
 use crate::{dot_ssh, install_service, IrohSsh, ServiceParams};
@@ -48,7 +49,10 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     println!("Connect to this this machine:");
     println!("\n  iroh-ssh my-user@{}\n", iroh_ssh.node_id());
     if persist {
-        println!("  (using persistent keys in ~/.ssh/irohssh_ed25519)");
+        
+        let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+        let ssh_dir = distro_home.join(".ssh");
+        println!("  (using persistent keys in {})", ssh_dir.display());
     } else {
         println!("  warning: (using ephemeral keys, run 'iroh-ssh server --persist' to create persistent keys)");
     }
