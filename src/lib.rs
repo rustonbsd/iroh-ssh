@@ -6,7 +6,7 @@ use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 use iroh::{protocol::Router, Endpoint};
 
 pub use ssh::dot_ssh;
-pub use service::install_service;
+pub use service::{install_service,uninstall_service};
 pub use service::ServiceParams;
 pub use service::Service;
 

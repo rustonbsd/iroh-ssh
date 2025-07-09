@@ -33,7 +33,7 @@ impl Service for WindowsService {
          */
 
         let nssm_path = WindowsService::init_nssm()?;
-        let ps1_script = WindowsService::PS1_BYTES
+        let ps1_script = WindowsService::INSTALL_PS1_BYTES
             .replace("[__SERVICE_NAME__]", WindowsService::SERVICE_NAME)
             .replace("[__BINARY_DIR__]", WindowsService::BINARY_DIR)
             .replace(
@@ -52,14 +52,12 @@ impl Service for WindowsService {
 
         // NOTE: RUNNING AS LOCAL USER NOT VIRTUAL SERVICE ACCOUNT
         // for some reason: .ssh folder in C:\WINDOWS\system32\config\systemprofile\.ssh
-        println!(
-            "{:?}",
             Command::new("powershell")
                 .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps1_script])
                 .show(false)
                 .status()
-                .with_context(|| "failed to install service")?
-        );
+                .with_context(|| "failed to install service")
+                .map(|_| ())?;
 
         Ok(())
     }
@@ -68,7 +66,29 @@ impl Service for WindowsService {
     }
 
     async fn uninstall() -> anyhow::Result<()> {
-        todo!("uninstalling service is not yet supported")
+        let nssm_path = WindowsService::init_nssm()?;
+        let ps1_script = WindowsService::UNINSTALL_PS1_BYTES
+            .replace("[__SERVICE_NAME__]", WindowsService::SERVICE_NAME)
+            .replace("[__BINARY_DIR__]", WindowsService::BINARY_DIR)
+            .replace(
+                "[__NSSM_PATH__]",
+                &nssm_path
+                    .to_str()
+                    .with_context(|| "failed to get nssm path")?,
+            )
+            .replace(
+                "[__CURRENT_EXE_PATH__]",
+                &std::env::current_exe()?
+                    .to_str()
+                    .with_context(|| "failed to get current exe path")?,
+            );
+
+        Command::new("powershell")
+            .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps1_script])
+            .show(false)
+            .status()
+            .with_context(|| "failed to uninstall service")
+            .map(|_| ())
     }
 }
 
@@ -78,7 +98,8 @@ impl WindowsService {
     const BINARY_DIR: &str = "C:\\ProgramData\\iroh-ssh";
 
     const NSSM_BYTES: &[u8] = include_bytes!("../../win/nssm.exe");
-    const PS1_BYTES: &str = include_str!("../../win/install.ps1");
+    const INSTALL_PS1_BYTES: &str = include_str!("../../win/install.ps1");
+    const UNINSTALL_PS1_BYTES: &str = include_str!("../../win/uninstall.ps1");
 
     fn init_nssm() -> anyhow::Result<std::path::PathBuf> {
         let mut temp_exe = tempfile::Builder::new()

@@ -60,9 +60,9 @@ async fn main() -> anyhow::Result<()> {
             api::server_mode(ssh_port, persist).await
         }
         (Some(Commands::Service { service_command }), _) => match service_command {
-            ServiceCommands::Install { ssh_port } => api::service_mode(ssh_port).await,
+            ServiceCommands::Install { ssh_port } => api::service::install(ssh_port).await,
             ServiceCommands::Uninstall {} => {
-                todo!("uninstalling service is not yet supported")
+                api::service::uninstall().await
             }
         },
         (Some(Commands::Info {}), _) => api::info_mode().await,

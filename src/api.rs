@@ -4,7 +4,7 @@ use anyhow::bail;
 use homedir::my_home;
 use iroh::{NodeId, SecretKey};
 
-use crate::{dot_ssh, install_service, IrohSsh, ServiceParams};
+use crate::{dot_ssh,  IrohSsh};
 
 pub async fn info_mode() -> anyhow::Result<()> {
     let key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false);
@@ -32,11 +32,24 @@ pub async fn info_mode() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn service_mode(ssh_port: u16) -> anyhow::Result<()> {
-    if install_service(ServiceParams { ssh_port }).await.is_err() {
-        println!("Service mode is only supported on linux and windows");
+pub mod service {
+    use crate::{install_service, uninstall_service, ServiceParams};
+
+    pub async fn install(ssh_port: u16) -> anyhow::Result<()> {
+        if install_service(ServiceParams { ssh_port }).await.is_err() {
+            println!("service install is only supported on linux and windows");
+            anyhow::bail!("service install is only supported on linux and windows");
+        }
+        Ok(())
     }
-    Ok(())
+
+    pub async fn uninstall() -> anyhow::Result<()> {
+        if uninstall_service().await.is_err() {
+            println!("service uninstall is only supported on windows");
+            anyhow::bail!("service uninstall is only supported on windows");
+        }
+        Ok(())
+    }
 }
 
 pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {

@@ -28,3 +28,13 @@ pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()
         _ => anyhow::bail!("service mode is only supported on linux and windows"),
     }
 }
+
+pub async fn uninstall_service() -> anyhow::Result<()> {
+    match std::env::consts::OS {
+        #[cfg(target_os = "linux")]
+        "linux" => LinuxService::uninstall().await,
+        #[cfg(target_os = "windows")]
+        "windows" => WindowsService::uninstall().await,
+        _ => anyhow::bail!("service mode is only supported on linux and windows"),
+    }
+}
