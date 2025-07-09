@@ -1,41 +1,18 @@
-use crate::ServiceParams;
+use crate::{Service, ServiceParams};
+
+use std::io::Write as _;
+
+use anyhow::Context;
+#[cfg(target_os = "windows")]
+use runas::Command;
 
 #[cfg(target_os = "windows")]
-pub async fn install_service(params: ServiceParams) -> anyhow::Result<()> {
-    service::install(params)?;
+#[derive(Debug, Clone)]
+pub struct WindowsService;
 
-    Ok(())
-}
-
-#[cfg(windows)]
-mod service {
-
-    use crate::ServiceParams;
-    use std::io::Write as _;
-
-    use anyhow::Context;
-    use runas::Command;
-
-    const SERVICE_NAME: &str = "iroh-ssh";
-    //const SERVICE_PROFILE_DIR: &str = "C:\\Windows\\ServiceProfiles\\iroh-ssh";
-    const BINARY_DIR: &str = "C:\\ProgramData\\iroh-ssh";
-
-    const NSSM_BYTES: &[u8] = include_bytes!("../../win/nssm.exe");
-    const PS1_BYTES: &str = include_str!("../../win/install.ps1");
-
-    fn init_nssm() -> anyhow::Result<std::path::PathBuf> {
-        let mut temp_exe = tempfile::Builder::new()
-            .prefix("nssm-")
-            .suffix(".exe")
-            .tempfile_in("C:\\Windows\\Temp")?;
-        temp_exe.write_all(NSSM_BYTES)?;
-        let nssm_path = temp_exe.path().to_path_buf();
-        temp_exe.keep()?;
-
-        Ok(nssm_path)
-    }
-
-    pub fn install(service_params: ServiceParams) -> anyhow::Result<()> {
+#[cfg(target_os = "windows")]
+impl Service for WindowsService {
+    async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         /* https://github.com/rustonbsd/iroh-ssh/issues/5
         # nssm making a decent Windows service
         nssm.exe install iroh-ssh C:\ProgramData\iroh-ssh\iroh-ssh.exe
@@ -55,10 +32,10 @@ mod service {
         nssm.exe set iroh-ssh Type SERVICE_WIN32_OWN_PROCESS
          */
 
-        let nssm_path = init_nssm()?;
-        let ps1_script = PS1_BYTES
-            .replace("[__SERVICE_NAME__]", SERVICE_NAME)
-            .replace("[__BINARY_DIR__]", BINARY_DIR)
+        let nssm_path = WindowsService::init_nssm()?;
+        let ps1_script = WindowsService::PS1_BYTES
+            .replace("[__SERVICE_NAME__]", WindowsService::SERVICE_NAME)
+            .replace("[__BINARY_DIR__]", WindowsService::BINARY_DIR)
             .replace(
                 "[__NSSM_PATH__]",
                 &nssm_path
@@ -73,9 +50,8 @@ mod service {
             )
             .replace("[__SSH_PORT__]", &service_params.ssh_port.to_string());
 
-        println!("ps: {}", ps1_script);
-
         // NOTE: RUNNING AS LOCAL USER NOT VIRTUAL SERVICE ACCOUNT
+        // for some reason: .ssh folder in C:\WINDOWS\system32\config\systemprofile\.ssh
         println!(
             "{:?}",
             Command::new("powershell")
@@ -86,5 +62,33 @@ mod service {
         );
 
         Ok(())
+    }
+    async fn info() -> anyhow::Result<()> {
+        todo!("service info is not yet supported")
+    }
+
+    async fn uninstall() -> anyhow::Result<()> {
+        todo!("uninstalling service is not yet supported")
+    }
+}
+
+#[cfg(windows)]
+impl WindowsService {
+    const SERVICE_NAME: &str = "iroh-ssh";
+    const BINARY_DIR: &str = "C:\\ProgramData\\iroh-ssh";
+
+    const NSSM_BYTES: &[u8] = include_bytes!("../../win/nssm.exe");
+    const PS1_BYTES: &str = include_str!("../../win/install.ps1");
+
+    fn init_nssm() -> anyhow::Result<std::path::PathBuf> {
+        let mut temp_exe = tempfile::Builder::new()
+            .prefix("nssm-")
+            .suffix(".exe")
+            .tempfile_in("C:\\Windows\\Temp")?;
+        temp_exe.write_all(WindowsService::NSSM_BYTES)?;
+        let nssm_path = temp_exe.path().to_path_buf();
+        temp_exe.keep()?;
+
+        Ok(nssm_path)
     }
 }

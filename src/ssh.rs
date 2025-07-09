@@ -255,7 +255,16 @@ impl ProtocolHandler for IrohSsh {
 
 pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
-    let ssh_dir = distro_home.join(".ssh");
+    let mut ssh_dir = distro_home.join(".ssh");
+
+    // Weird windows System service profile location:
+    // "C:\WINDOWS\system32\config\systemprofile\.ssh"
+    #[cfg(target_os = "windows")]
+    if !ssh_dir.join("irohssh_ed25519.pub").exists() {
+        ssh_dir = std::path::PathBuf::from(r#"C:\WINDOWS\system32\config\systemprofile\.ssh"#);
+        println!("[INFO] using windows service ssh_dir: {}", ssh_dir.display());
+    }
+
     let pub_key = ssh_dir.join("irohssh_ed25519.pub");
     let priv_key = ssh_dir.join("irohssh_ed25519");
 
