@@ -9,7 +9,8 @@ use crate::{dot_ssh,  IrohSsh};
 pub async fn info_mode() -> anyhow::Result<()> {
     let key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false);
     if key.is_err() {
-        println!("No keys found, run 'iroh-ssh server --persist' or with '-p' to create it");
+        println!("No keys found, run 'iroh-ssh server --persist' or '-p' to create it");
+        println!();
         println!("(if an iroh-ssh instance is currently running, it is using ephemeral keys)");
         bail!("No keys found")
     }
@@ -24,11 +25,11 @@ pub async fn info_mode() -> anyhow::Result<()> {
     println!("run 'iroh-ssh server --persist' to start the server with persistent keys");
     println!("run 'iroh-ssh server' to start the server with ephemeral keys");
     println!(
-        "run 'iroh-ssh service' to start the server as a service (always uses persistent keys)"
+        "run 'iroh-ssh service install' to copy the binary, install the service and start the server (always uses persistent keys)"
     );
     println!("");
     println!("Your iroh-ssh nodeid:");
-    println!("  iroh-ssh root@{}\n\n", key.public().to_string());
+    println!("  iroh-ssh my-user@{}\n\n", key.public().to_string());
     Ok(())
 }
 
@@ -45,8 +46,8 @@ pub mod service {
 
     pub async fn uninstall() -> anyhow::Result<()> {
         if uninstall_service().await.is_err() {
-            println!("service uninstall is only supported on windows");
-            anyhow::bail!("service uninstall is only supported on windows");
+            println!("service uninstall is only supported on linux or windows");
+            anyhow::bail!("service uninstall is only supported on linux or windows");
         }
         Ok(())
     }

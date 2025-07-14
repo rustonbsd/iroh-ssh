@@ -18,6 +18,7 @@ pub struct IrohSsh {
     #[allow(dead_code)]
     pub(crate) public_key: [u8; PUBLIC_KEY_LENGTH],
     pub(crate) inner: Option<Inner>,
+    pub(crate) ssh_port: u16,
 }
 
 #[derive(Debug, Clone)]

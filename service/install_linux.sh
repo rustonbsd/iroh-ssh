@@ -15,10 +15,8 @@ cp [BINARYPATH] /usr/local/bin/iroh-ssh
 
 systemctl is-active iroh-ssh-server.service
 if [ $? -eq 0 ]; then
-    echo "Service is already running"
     exit 0
 else
-    echo "Starting service..."
     systemctl enable iroh-ssh-server.service
     systemctl start iroh-ssh-server.service
 fi

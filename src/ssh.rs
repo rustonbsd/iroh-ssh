@@ -1,22 +1,11 @@
-macro_rules! ok_or_continue {
-    ($expr:expr) => {
-        match $expr {
-            Ok(val) => val,
-            Err(_) => continue,
-        }
-    };
-}
-
 use crate::{Builder, Inner, IrohSsh};
-use std::{pin::Pin, process::Stdio};
+use std::process::Stdio;
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh::{
-    Endpoint, NodeId, SecretKey,
-    endpoint::Connection,
-    protocol::{ProtocolHandler, Router},
+    endpoint::Connection, protocol::{ProtocolHandler, Router}, Endpoint, NodeId, SecretKey, Watcher
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -69,6 +58,7 @@ impl Builder {
             public_key: endpoint.node_id().as_bytes().clone(),
             secret_key: self.secret_key,
             inner: None,
+            ssh_port: self.accept_port.unwrap_or(22),
         };
 
         let router = if self.accept_incoming {
@@ -79,16 +69,6 @@ impl Builder {
         .spawn();
 
         iroh_ssh.add_inner(endpoint, router);
-
-        if self.accept_incoming && self.accept_port.is_some() {
-            tokio::spawn({
-                let iroh_ssh = iroh_ssh.clone();
-                let accept_port = self.accept_port.expect("accept_port not set");
-                async move {
-                    iroh_ssh._spawn(accept_port).await.expect("spawn failed");
-                }
-            });
-        }
 
         Ok(iroh_ssh)
     }
@@ -171,85 +151,60 @@ impl IrohSsh {
             .endpoint
             .node_id()
     }
-
-    async fn _spawn(self, port: u16) -> anyhow::Result<()> {
-        println!("Server listening for iroh connections...");
-
-        while let Some(incoming) = self
-            .inner
-            .clone()
-            .expect("inner not set")
-            .endpoint
-            .accept()
-            .await
-        {
-            let mut connecting = match incoming.accept() {
-                Ok(connecting) => connecting,
-                Err(err) => {
-                    println!("Incoming connection failure: {err:#}");
-                    continue;
-                }
-            };
-
-            let alpn = ok_or_continue!(connecting.alpn().await);
-            let conn = ok_or_continue!(connecting.await);
-            let node_id = ok_or_continue!(conn.remote_node_id());
-
-            println!("{}: {node_id} connected", String::from_utf8_lossy(&alpn));
-
-            tokio::spawn(async move {
-                match conn.accept_bi().await {
-                    Ok((mut iroh_send, mut iroh_recv)) => {
-                        println!("Accepted bidirectional stream from {}", node_id);
-
-                        match TcpStream::connect(format!("127.0.0.1:{}", port)).await {
-                            Ok(mut ssh_stream) => {
-                                println!("Connected to local SSH server on port {}", port);
-
-                                let (mut local_read, mut local_write) = ssh_stream.split();
-
-                                let a_to_b = async move {
-                                    tokio::io::copy(&mut local_read, &mut iroh_send).await
-                                };
-                                let b_to_a = async move {
-                                    tokio::io::copy(&mut iroh_recv, &mut local_write).await
-                                };
-
-                                tokio::select! {
-                                    result = a_to_b => {
-                                        println!("SSH->Iroh stream ended: {:?}", result);
-                                    },
-                                    result = b_to_a => {
-                                        println!("Iroh->SSH stream ended: {:?}", result);
-                                    },
-                                };
-                            }
-                            Err(e) => {
-                                println!("Failed to connect to SSH server: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("Failed to accept bidirectional stream: {}", e);
-                    }
-                }
-            });
-        }
-        Ok(())
-    }
 }
 
 impl ProtocolHandler for IrohSsh {
-    fn accept(
+    async fn accept(
         &self,
-        conn: Connection,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>> {
-        let iroh_ssh = self.clone();
+        connection: Connection,
+    ) -> Result<(), iroh::protocol::AcceptError> {
 
-        Box::pin(async move {
-            iroh_ssh.accept(conn).await?;
-            Ok(())
-        })
+        let alpn = connection.alpn().ok_or_else(|| iroh::protocol::AcceptError::NotAllowed {  })?;
+        if alpn != IrohSsh::ALPN() {
+            return Err(iroh::protocol::AcceptError::NotAllowed {})
+        }
+
+        let node_id = connection.remote_node_id()?;
+        println!("{}: {node_id} connected", String::from_utf8_lossy(&alpn));
+    
+        match connection.accept_bi().await {
+            Ok((mut iroh_send, mut iroh_recv)) => {
+                println!("Accepted bidirectional stream from {}", node_id);
+
+                match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
+                    Ok(mut ssh_stream) => {
+                        println!("Connected to local SSH server on port {}", self.ssh_port);
+
+                        let (mut local_read, mut local_write) = ssh_stream.split();
+
+                        let a_to_b = async move {
+                            tokio::io::copy(&mut local_read, &mut iroh_send).await
+                        };
+                        let b_to_a = async move {
+                            tokio::io::copy(&mut iroh_recv, &mut local_write).await
+                        };
+
+                        tokio::select! {
+                            result = a_to_b => {
+                                println!("SSH->Iroh stream ended: {:?}", result);
+                            },
+                            result = b_to_a => {
+                                println!("Iroh->SSH stream ended: {:?}", result);
+                            },
+                        };
+                    }
+                    Err(e) => {
+                        println!("Failed to connect to SSH server: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Failed to accept bidirectional stream: {}", e);
+            }
+        }
+
+        Ok(())
+        
     }
 }
 
@@ -257,6 +212,14 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
     let mut ssh_dir = distro_home.join(".ssh");
+
+    // For now linux services are installed as "sudo'er" so
+    // we need to use the root .ssh directory
+    #[cfg(target_os = "linux")]
+    if !ssh_dir.join("irohssh_ed25519.pub").exists() {
+        ssh_dir = std::path::PathBuf::from("/root/.ssh");
+        println!("[INFO] using linux service ssh_dir: {}", ssh_dir.display());
+    }
 
     // Weird windows System service profile location:
     // "C:\WINDOWS\system32\config\systemprofile\.ssh"
@@ -315,7 +278,7 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<
 }
 
 async fn wait_for_relay(endpoint: &Endpoint) -> anyhow::Result<()> {
-    while endpoint.home_relay().get().is_err() {
+    while endpoint.home_relay().initialized().await.is_err(){
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     Ok(())
