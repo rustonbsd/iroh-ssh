@@ -255,6 +255,7 @@ impl ProtocolHandler for IrohSsh {
 
 pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+    #[allow(unused_mut)]
     let mut ssh_dir = distro_home.join(".ssh");
 
     // Weird windows System service profile location:
