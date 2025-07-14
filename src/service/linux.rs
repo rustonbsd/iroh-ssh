@@ -10,8 +10,6 @@ impl Service for LinuxService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         let path = LinuxService::init_install_script(service_params)?;
 
-        // copy binary to /usr/local/bin with admin rights
-
         runas::Command::new("sh")
             .arg(path)
             .show(false)

@@ -6,10 +6,28 @@ use iroh_ssh::api;
     name = "irohssh",
     about = "SSH without IP",
     after_help = "
-Usage Examples:
-  iroh-ssh server --persist                // Start server with persistent keys
-  iroh-ssh my-user@6598395384059bf969...   // Connect to server
-  iroh-ssh service                         // Linux only
+Server:
+  // Start server with persistent keys in home directory (~/.ssh/irohssh_ed25519)
+  iroh-ssh server --persist
+
+  // Start server with ephemeral keys (useful for testing or short-lived connections)
+  iroh-ssh server
+
+Client:
+  // Connect to server
+  iroh-ssh my-user@6598395384059bf969...
+  iroh-ssh connect my-user@6598395384059bf969...
+
+Service:
+  // Install as service (linux and windows only, uses persistent keys)
+  iroh-ssh service install
+
+  // Uninstall service
+  iroh-ssh service uninstall
+
+Info:
+  // Display connection information if keys are persisted
+  iroh-ssh info
 "
 )]
 struct Cli {
@@ -24,7 +42,7 @@ enum Commands {
         about = "Connect to a remote server - iroh-ssh `connect` my-user@NODE_ID (`connect` is optional)"
     )]
     Connect { target: String },
-    #[command(about = "Run as server (for exampel in a tmux session)")]
+    #[command(about = "Run as server (for example in a tmux session)")]
     Server {
         #[arg(long, default_value = "22")]
         ssh_port: u16,
@@ -68,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
         (Some(Commands::Info {}), _) => api::info_mode().await,
         (None, Some(target)) => api::client_mode(target).await,
         (None, None) => {
-            anyhow::bail!("Please provide a target or use 'connect' subcommand")
+            anyhow::bail!("Please provide a target or use the 'connect' subcommand")
         }
     }
 }
