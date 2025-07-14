@@ -1,5 +1,5 @@
-use crate::ServiceParams;
 use crate::Service;
+use crate::ServiceParams;
 
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone)]
@@ -9,6 +9,8 @@ pub struct LinuxService;
 impl Service for LinuxService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         let path = LinuxService::init_install_script(service_params)?;
+
+        // copy binary to /usr/local/bin with admin rights
 
         runas::Command::new("sh")
             .arg(path)
@@ -36,10 +38,8 @@ impl Service for LinuxService {
     }
 }
 
-
 #[cfg(target_os = "linux")]
 impl LinuxService {
-
     const INSTALL_SH_BYTES: &str = include_str!("../../service/install_linux.sh");
     const UNINSTALL_SH_BYTES: &str = include_str!("../../service/uninstall_linux.sh");
 
@@ -50,7 +50,17 @@ impl LinuxService {
             .prefix("iroh_ssh_install-")
             .suffix(".sh")
             .tempfile_in("/tmp")?;
-        temp_sh.write_all(LinuxService::INSTALL_SH_BYTES.replace("[SSHPORT]", &service_params.ssh_port.to_string()).as_bytes())?;
+        temp_sh.write_all(
+            LinuxService::INSTALL_SH_BYTES
+                .replace("[SSHPORT]", &service_params.ssh_port.to_string())
+                .replace(
+                    "[BINARYPATH]",
+                    &std::env::current_exe()?
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("failed to get current executable path"))?,
+                )
+                .as_bytes(),
+        )?;
         let sh_path = temp_sh.path().to_path_buf();
         temp_sh.keep()?;
 
