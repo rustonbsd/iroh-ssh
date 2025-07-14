@@ -11,6 +11,8 @@ RestartSec=3s
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/iroh-ssh-server.service
 
+cp [BINARYPATH] /usr/local/bin/iroh-ssh
+
 systemctl is-active iroh-ssh-server.service
 if [ $? -eq 0 ]; then
     echo "Service is already running"
