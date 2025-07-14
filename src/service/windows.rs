@@ -97,9 +97,9 @@ impl WindowsService {
     const SERVICE_NAME: &str = "iroh-ssh";
     const BINARY_DIR: &str = "C:\\ProgramData\\iroh-ssh";
 
-    const NSSM_BYTES: &[u8] = include_bytes!("../../win/nssm.exe");
-    const INSTALL_PS1_BYTES: &str = include_str!("../../win/install.ps1");
-    const UNINSTALL_PS1_BYTES: &str = include_str!("../../win/uninstall.ps1");
+    const NSSM_BYTES: &[u8] = include_bytes!("../../service/nssm.exe");
+    const INSTALL_PS1_BYTES: &str = include_str!("../../service/install.ps1");
+    const UNINSTALL_PS1_BYTES: &str = include_str!("../../service/uninstall.ps1");
 
     fn init_nssm() -> anyhow::Result<std::path::PathBuf> {
         let mut temp_exe = tempfile::Builder::new()
