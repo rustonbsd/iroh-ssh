@@ -7,16 +7,67 @@
 **SSH to any machine without ip, behind a NAT/firewall without port forwarding or VPN setup.**
 
 ```bash
-iroh-ssh user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+# on server
+> iroh-ssh server --persist
+
+    Connect to this this machine:
+
+    iroh-ssh my-user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
+
+
+# on client
+> iroh-ssh user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
 ```
 
 **That's all it takes.** (requires ssh/(an ssh server) to be installed)
 
 ---
+
+## Installation
+
+```bash
+cargo install iroh-ssh
+```
+
+Download and setup the binary automatically for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
+
+Linux
+```bash 
+# Linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.linux
+chmod +x iroh-ssh.linux
+sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
+```
+
+macOS
+```bash
+# macOS arm
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.macos
+chmod +x iroh-ssh.macos
+sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
+```
+
+Windows
+```bash
+# Windows x86 64bit
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.exe
+mkdir %LOCALAPPDATA%\iroh-ssh
+move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
+setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
+```
+
+Verify that the installation was successful
+```bash
+# restart your terminal first
+> iroh-ssh --help
+```
+
+---
+
 ## Client Connection  
 
 ```bash
-# Install for your distro (see below)
+# Install for your distro (see above)
 # Connect from anywhere
 > iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
@@ -31,7 +82,7 @@ Works through any firewall, NAT, or private network. No configuration needed.
 ## Server Setup
 
 ```bash
-# Install for your distro (see below)
+# Install for your distro (see above)
 # (use with tmux or install as service on linux)
 
 > iroh-ssh server --persist
@@ -40,7 +91,7 @@ Works through any firewall, NAT, or private network. No configuration needed.
 
     iroh-ssh my-user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
 
-    (using persistent keys in ~/.ssh/irohssh_ed25519)
+    (using persistent keys in /home/my-user/.ssh/irohssh_ed25519)
 
     Server listening for iroh connections...
     client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :22
@@ -52,7 +103,7 @@ Works through any firewall, NAT, or private network. No configuration needed.
 or use ephemeral keys
 
 ```bash
-# Install for your distro (see below)
+# Install for your distro (see above)
 # (use with tmux or install as service on linux)
 
 > iroh-ssh server
@@ -81,15 +132,15 @@ Display its Node ID and share it to allow connection
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.1
+    iroh-ssh version 0.2.2
     https://github.com/rustonbsd/iroh-ssh
 
     run 'iroh-ssh server --persist' to start the server with persistent keys
     run 'iroh-ssh server' to start the server with ephemeral keys
-    run 'iroh-ssh service' to start the server as a service (always uses persistent keys)
+    run 'iroh-ssh service install' to start the server as a service (always uses persistent keys)
 
     Your iroh-ssh nodeid:
-    iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+      iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
 
 ---
@@ -100,15 +151,15 @@ Display its Node ID and share it to allow connection
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────────┐    ┌─────────────┐
-│ iroh-ssh    │───▶│ system SSH   │───▶│ QUIC Tunnel     │───▶│ iroh-ssh    │
-│ (your machine)   │ TCP Listener │    │ (P2P Network)   │    │ server      │
+│ iroh-ssh    │───▶│ internal TCP │───▶│ QUIC Tunnel     │───▶│ iroh-ssh    │
+│ (your machine)   │    Listener  │    │ (P2P Network)   │    │ server      │
 └─────────────┘    | (your machine)    └─────────────────┘    └─────────────┘
                    └──────────────┘
-                           │                                           │
-                           ▼                                           ▼
+        │                  ▲                                           │
+        ▼                  │                                           ▼
                    ┌──────────────┐                            ┌─────────────┐
-                   │ localhost:   │                            │ SSH Server  │
-                   │ random_port  │                            │ (port 22)   │
+        ⦜   -- ▶   │ run:     ssh │                            │ SSH Server  │
+                   │ user@localhost                            │ (port 22)   │
                    └──────────────┘                            └─────────────┘
 ```
 
@@ -125,47 +176,6 @@ Display its Node ID and share it to allow connection
 - **IoT devices**: SSH to embedded systems on private networks
 - **Development**: Access staging servers and build machines
 
-## Installation
-
-Download the binary for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
-
-Linux
-```bash 
-# Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.linux
-chmod +x iroh-ssh.linux
-sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
-
-# restart your terminal after!
-```
-
-macOS
-```bash
-# macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.macos
-chmod +x iroh-ssh.macos
-sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
-
-# restart your terminal after!
-```
-
-Windows
-```bash
-# Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.1/iroh-ssh.exe
-mkdir %LOCALAPPDATA%\iroh-ssh
-move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
-setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
-
-# restart your terminal after!
-```
-
-Verify that it works
-```bash
-# restart your terminal first
-> iroh-ssh --help
-```
-
 ## Commands
 
 ```bash
@@ -175,8 +185,11 @@ Verify that it works
 # Server modes
 > iroh-ssh server --persist          # Interactive mode, e.g. use tmux (default SSH port 22)
 > iroh-ssh server --ssh-port 2222    # Custom SSH port (using ephemeral keys)
-> iroh-ssh service                   # Background daemon (Linux only, default port 22)
-> iroh-ssh service --ssh-port 2222   # Background daemon with custom SSH port
+
+# Service mode
+> iroh-ssh service install                   # Background daemon (linux and windows only, default port 22)
+> iroh-ssh service install --ssh-port 2222   # Background daemon with custom SSH port
+> iroh-ssh service uninstall                 # Uninstall service
 
 # Client connection
 > iroh-ssh user@<NODE_ID>            # Connect to remote server
@@ -197,7 +210,9 @@ Verify that it works
 - [x] Linux service mode
 - [x] Add howto gifs
 - [x] Add -p flag for persistence
+- [x] Windows service mode
 - [ ] Certificate support (`-i` flag)
+- [ ] MacOS service mode
 - [ ] Additional SSH features
 
 ## License

@@ -13,7 +13,7 @@ Server:
   // Start server with ephemeral keys (useful for testing or short-lived connections)
   iroh-ssh server
 
-Client:
+Connect:
   // Connect to server
   iroh-ssh my-user@6598395384059bf969...
   iroh-ssh connect my-user@6598395384059bf969...
