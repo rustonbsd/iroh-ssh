@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::{path::PathBuf, str::FromStr as _};
 
 use anyhow::bail;
 use homedir::my_home;
@@ -82,10 +82,10 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn client_mode(target: String) -> anyhow::Result<()> {
+pub async fn client_mode(target: String, identity_file: Option<PathBuf>) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&target)?;
     let iroh_ssh = IrohSsh::new().accept_incoming(false).build().await?;
-    let mut ssh_process = iroh_ssh.connect(&ssh_user, iroh_node_id).await?;
+    let mut ssh_process = iroh_ssh.connect(&ssh_user, iroh_node_id, identity_file).await?;
 
     ssh_process.wait().await?;
 

@@ -1,5 +1,5 @@
 use crate::{Builder, Inner, IrohSsh};
-use std::process::Stdio;
+use std::{path::PathBuf, process::Stdio};
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
@@ -88,7 +88,7 @@ impl IrohSsh {
         self.inner = Some(Inner { endpoint, router });
     }
 
-    pub async fn connect(&self, ssh_user: &str, node_id: NodeId) -> anyhow::Result<Child> {
+    pub async fn connect(&self, ssh_user: &str, node_id: NodeId, identity_file: Option<PathBuf>) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -125,8 +125,8 @@ impl IrohSsh {
             }
         });
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let ssh_process = Command::new("ssh")
-            .arg("-tt") // Force pseudo-terminal allocation
+        let mut cmd = &mut Command::new("ssh");
+        cmd = cmd.arg("-tt") // Force pseudo-terminal allocation
             .arg(format!("{}@127.0.0.1", ssh_user))
             .arg("-p")
             .arg(port.to_string())
@@ -135,8 +135,13 @@ impl IrohSsh {
             .arg("-o")
             .arg("UserKnownHostsFile=/dev/null")
             .arg("-o")
-            .arg("LogLevel=ERROR") // Reduce SSH debug output
-            .stdin(Stdio::inherit())
+            .arg("LogLevel=ERROR"); // Reduce SSH debug output
+
+        if let Some(identity_file) = identity_file {
+            cmd.arg("-i").arg(identity_file);
+        }
+
+        let ssh_process = cmd.stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
