@@ -17,6 +17,8 @@
 
 # on client
 > iroh-ssh user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
+# or with certificate
+> iroh-ssh -i ~/.ssh/id_rsa_my_cert my-user@bb8e1a5661a6dfa9ae2dd978922f30f524f6fd8c99b3de021c53f292aae74330
 ```
 
 **That's all it takes.** (requires ssh/(an ssh server) to be installed)
@@ -34,7 +36,7 @@ Download and setup the binary automatically for your operating system from [GitH
 Linux
 ```bash 
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.3/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
@@ -42,7 +44,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.3/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 ```
@@ -50,7 +52,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.2/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.3/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -143,7 +145,7 @@ Display its Node ID and share it to allow connection
     run 'iroh-ssh service install' to start the server as a service (always uses persistent keys)
 
     Your iroh-ssh nodeid:
-      iroh-ssh root@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+      iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 ```
 
 ---
@@ -197,6 +199,7 @@ Display its Node ID and share it to allow connection
 # Client connection
 > iroh-ssh user@<NODE_ID>            # Connect to remote server
 > iroh-ssh connect user@<NODE_ID>    # Explicit connect command
+> iroh-ssh -i ~/.ssh/id_rsa_my_cert user@<NODE_ID>  # Connect with certificate
 ```
 
 ## Security Model
@@ -214,7 +217,7 @@ Display its Node ID and share it to allow connection
 - [x] Add howto gifs
 - [x] Add -p flag for persistence
 - [x] Windows service mode
-- [ ] Certificate support (`-i` flag)
+- [x] Certificate support (`-i` flag)
 - [ ] MacOS service mode
 - [ ] Additional SSH features
 
