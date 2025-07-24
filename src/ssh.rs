@@ -36,8 +36,8 @@ impl Builder {
         self
     }
 
-    pub fn dot_ssh_integration(mut self, persist: bool) -> Self {
-        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist) {
+    pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
+        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service) {
             self.secret_key = secret_key.to_bytes();
         }
         self
@@ -213,7 +213,9 @@ impl ProtocolHandler for IrohSsh {
     }
 }
 
-pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<SecretKey> {
+
+
+pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
     let mut ssh_dir = distro_home.join(".ssh");
@@ -221,7 +223,7 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<
     // For now linux services are installed as "sudo'er" so
     // we need to use the root .ssh directory
     #[cfg(target_os = "linux")]
-    if !ssh_dir.join("irohssh_ed25519.pub").exists() {
+    if service {
         ssh_dir = std::path::PathBuf::from("/root/.ssh");
         println!("[INFO] using linux service ssh_dir: {}", ssh_dir.display());
     }
@@ -229,7 +231,7 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<
     // Weird windows System service profile location:
     // "C:\WINDOWS\system32\config\systemprofile\.ssh"
     #[cfg(target_os = "windows")]
-    if !ssh_dir.join("irohssh_ed25519.pub").exists() {
+    if service {
         ssh_dir = std::path::PathBuf::from(r#"C:\WINDOWS\system32\config\systemprofile\.ssh"#);
         println!("[INFO] using windows service ssh_dir: {}", ssh_dir.display());
     }
@@ -244,7 +246,7 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool) -> anyhow::Result<
         (false, true) => {
             std::fs::create_dir_all(&ssh_dir)?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
-            dot_ssh(default_secret_key, persist)
+            dot_ssh(default_secret_key, persist, service)
         }
         (true, true) => {
             // check pub and priv key already exists
