@@ -7,8 +7,15 @@ use iroh::{NodeId, SecretKey};
 use crate::{dot_ssh,  IrohSsh};
 
 pub async fn info_mode() -> anyhow::Result<()> {
-    let key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false);
-    if key.is_err() {
+    let key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,false) {
+        Ok(key) => Some(key),
+        Err(_) => match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,true) {
+            Ok(key) => Some(key),
+            Err(_) => None,
+        },
+    };
+    
+    if key.is_some() {
         println!("No keys found, run 'iroh-ssh server --persist' or '-p' to create it");
         println!();
         println!("(if an iroh-ssh instance is currently running, it is using ephemeral keys)");
@@ -56,7 +63,7 @@ pub mod service {
 pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     let mut iroh_ssh_builder = IrohSsh::new().accept_incoming(true).accept_port(ssh_port);
     if persist {
-        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true);
+        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true,false);
     }
     let iroh_ssh = iroh_ssh_builder.build().await?;
 
