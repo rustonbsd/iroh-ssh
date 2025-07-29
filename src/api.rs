@@ -7,36 +7,48 @@ use iroh::{NodeId, SecretKey};
 use crate::{dot_ssh,  IrohSsh};
 
 pub async fn info_mode() -> anyhow::Result<()> {
-    let key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,false) {
+    let server_key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,false) {
         Ok(key) => Some(key),
-        Err(_) => match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,true) {
-            Ok(key) => Some(key),
-            Err(_) => None,
-        },
+        Err(_) => None,
+    };
+    let service_key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,true) {
+        Ok(key) => Some(key),
+        Err(_) => None,
     };
     
-    if key.is_some() {
-        println!("No keys found, run 'iroh-ssh server --persist' or '-p' to create it");
+    if server_key.is_none()  && service_key.is_none() {
+        println!("No keys found, run for server or service:\n  'iroh-ssh server --persist' or '-p' to create it");
         println!();
         println!("(if an iroh-ssh instance is currently running, it is using ephemeral keys)");
         bail!("No keys found")
     }
 
-    let key = key.unwrap();
-    let node_id = key.public();
-    println!("Your iroh-ssh nodeid: {}", node_id.to_string());
-
     println!("iroh-ssh version {}", env!("CARGO_PKG_VERSION"));
     println!("https://github.com/rustonbsd/iroh-ssh");
     println!("");
-    println!("run 'iroh-ssh server --persist' to start the server with persistent keys");
-    println!("run 'iroh-ssh server' to start the server with ephemeral keys");
-    println!(
-        "run 'iroh-ssh service install' to copy the binary, install the service and start the server (always uses persistent keys)"
-    );
-    println!("");
-    println!("Your iroh-ssh nodeid:");
-    println!("  iroh-ssh my-user@{}\n\n", key.public().to_string());
+
+    if server_key.is_none() && service_key.is_none() {
+        println!("run 'iroh-ssh server --persist' to start the server with persistent keys");
+        println!("run 'iroh-ssh server' to start the server with ephemeral keys");
+        println!(
+            "run 'iroh-ssh service install' to copy the binary, install the service and start the server (always uses persistent keys)"
+        );
+    }
+    
+    if let Some(key) = server_key {
+        println!("");
+        println!("Your server iroh-ssh nodeid:");
+        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public().to_string());
+        println!("");
+    }
+    
+    if let Some(key) = service_key {
+        println!("");
+        println!("Your service iroh-ssh nodeid:");
+        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public().to_string());
+        println!("");
+    }
+    
     Ok(())
 }
 
@@ -68,7 +80,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     let iroh_ssh = iroh_ssh_builder.build().await?;
 
     println!("Connect to this this machine:");
-    println!("\n  iroh-ssh my-user@{}\n", iroh_ssh.node_id());
+    println!("\n  iroh-ssh {}@{}\n", whoami::username(), iroh_ssh.node_id());
     if persist {
         
         let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;

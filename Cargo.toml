@@ -7,7 +7,7 @@ repository = "https://github.com/rustonbsd/iroh-ssh"
 readme = "README.md"
 keywords = ["networking"]
 categories = ["network-programming"]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 
 [dependencies]
@@ -26,6 +26,7 @@ tokio = { version = "1", features = [
 ] }
 clap = { version = "4.5.41", features = ["derive"] }
 homedir = "0.3.6"
+whoami = "1.6.0"
 z32 = "1.3"
 runas = "1.2.0"
 tempfile = "3.20.0"
