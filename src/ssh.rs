@@ -225,7 +225,6 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> 
     #[cfg(target_os = "linux")]
     if service {
         ssh_dir = std::path::PathBuf::from("/root/.ssh");
-        println!("[INFO] using linux service ssh_dir: {}", ssh_dir.display());
     }
 
     // Weird windows System service profile location:
@@ -233,7 +232,6 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> 
     #[cfg(target_os = "windows")]
     if service {
         ssh_dir = std::path::PathBuf::from(r#"C:\WINDOWS\system32\config\systemprofile\.ssh"#);
-        println!("[INFO] using windows service ssh_dir: {}", ssh_dir.display());
     }
 
     let pub_key = ssh_dir.join("irohssh_ed25519.pub");
