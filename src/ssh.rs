@@ -102,6 +102,7 @@ impl IrohSsh {
         ssh_user: &str,
         node_id: NodeId,
         client_options: ClientOptions,
+        execute_command: Vec<String>
     ) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
@@ -161,6 +162,7 @@ impl IrohSsh {
         if let Some(remote_forward) = client_options.remote_forward {
             cmd.arg("-R").arg(remote_forward);
         }
+        cmd.arg(execute_command.join(" "));
 
         let ssh_process = cmd
             .stdin(Stdio::inherit())

@@ -111,11 +111,11 @@ pub struct ClientOptions {
     pub remote_forward: Option<String>,
 }
 
-pub async fn client_mode(client_options: ClientOptions) -> anyhow::Result<()> {
+pub async fn client_mode(client_options: ClientOptions, execute_command: Vec<String>) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&client_options.target)?;
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh
-        .connect(&ssh_user, iroh_node_id, client_options)
+        .connect(&ssh_user, iroh_node_id, client_options, execute_command)
         .await?;
 
     ssh_process.wait().await?;

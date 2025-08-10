@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, command};
 use iroh_ssh::api::{self, ClientOptions};
 
+const TARGET_HELP: &str = "The host to connect to";
+
 #[derive(Parser)]
 #[command(
     name = "irohssh",
@@ -34,7 +36,8 @@ Info:
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Option<Commands>,
+    cli_command: Option<Commands>,
+    #[arg(help = TARGET_HELP)]
     target: Option<String>,
     #[command(flatten)]
     implicit_connect: ConnectArgs,
@@ -46,9 +49,12 @@ enum Commands {
         about = "Connect to a remote server - iroh-ssh `connect` my-user@NODE_ID (`connect` is optional)"
     )]
     Connect {
+        #[arg(help = TARGET_HELP)]
         target: String,
         #[command(flatten)]
         args: ConnectArgs,
+        #[arg(help = "Command to be executed on the target")]
+        execute_command: Vec<String>,
     },
     #[command(about = "Run as server (for example in a tmux session)")]
     Server {
@@ -101,9 +107,9 @@ enum ServiceCommands {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match (cli.command, cli.target) {
-        (Some(Commands::Connect { target, args }), _) => {
-            api::client_mode(args.into_client_options(target)).await
+    match (cli.cli_command, cli.target) {
+        (Some(Commands::Connect { target, args, execute_command }), _) => {
+            api::client_mode(args.into_client_options(target), execute_command).await
         }
         (Some(Commands::Server { ssh_port, persist }), _) => {
             api::server_mode(ssh_port, persist).await
@@ -113,7 +119,9 @@ async fn main() -> anyhow::Result<()> {
             ServiceCommands::Uninstall {} => api::service::uninstall().await,
         },
         (Some(Commands::Info {}), _) => api::info_mode().await,
-        (None, Some(target)) => api::client_mode(cli.implicit_connect.into_client_options(target)).await,
+        (None, Some(target)) => {
+            api::client_mode(cli.implicit_connect.into_client_options(target), vec![]).await
+        }
         (None, None) => {
             anyhow::bail!("Please provide a target or use the 'connect' subcommand")
         }
