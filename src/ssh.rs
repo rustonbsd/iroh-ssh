@@ -1,5 +1,5 @@
-use crate::{Builder, Inner, IrohSsh};
-use std::{path::PathBuf, process::Stdio};
+use crate::{Builder, Inner, IrohSsh, api::ClientOptions};
+use std::process::Stdio;
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
@@ -101,7 +101,7 @@ impl IrohSsh {
         &self,
         ssh_user: &str,
         node_id: NodeId,
-        identity_file: Option<PathBuf>,
+        client_options: ClientOptions,
     ) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
@@ -113,7 +113,10 @@ impl IrohSsh {
                 let _ = handle_next(&listener, &conn).await;
             }
 
-            async fn handle_next(listener: &TcpListener, conn: &Connection) -> Result<(), std::io::Error> {
+            async fn handle_next(
+                listener: &TcpListener,
+                conn: &Connection,
+            ) -> Result<(), std::io::Error> {
                 let (mut stream, _) = listener.accept().await?;
                 let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
                 tokio::spawn(async move {
@@ -149,8 +152,14 @@ impl IrohSsh {
             .arg("-o")
             .arg("LogLevel=ERROR"); // Reduce SSH debug output
 
-        if let Some(identity_file) = identity_file {
+        if let Some(identity_file) = client_options.identity_file {
             cmd.arg("-i").arg(identity_file);
+        }
+        if let Some(local_forward) = client_options.local_forward {
+            cmd.arg("-L").arg(local_forward);
+        }
+        if let Some(remote_forward) = client_options.remote_forward {
+            cmd.arg("-R").arg(remote_forward);
         }
 
         let ssh_process = cmd
