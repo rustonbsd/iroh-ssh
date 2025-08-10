@@ -93,10 +93,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
         );
     }
     println!();
-    println!(
-        "client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}",
-        ssh_port
-    );
+    println!("client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{ssh_port}");
 
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
@@ -111,7 +108,10 @@ pub struct ClientOptions {
     pub remote_forward: Option<String>,
 }
 
-pub async fn client_mode(client_options: ClientOptions, execute_command: Vec<String>) -> anyhow::Result<()> {
+pub async fn client_mode(
+    client_options: ClientOptions,
+    execute_command: Vec<String>,
+) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&client_options.target)?;
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh

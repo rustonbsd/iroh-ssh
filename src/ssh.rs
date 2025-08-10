@@ -55,7 +55,7 @@ impl Builder {
             .bind()
             .await?;
 
-        wait_for_relay(&endpoint).await?;
+        endpoint.home_relay().initialized().await;
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.node_id().as_bytes(),
@@ -102,7 +102,7 @@ impl IrohSsh {
         ssh_user: &str,
         node_id: NodeId,
         client_options: ClientOptions,
-        execute_command: Vec<String>
+        execute_command: Vec<String>,
     ) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
@@ -143,7 +143,7 @@ impl IrohSsh {
         let mut cmd = &mut Command::new("ssh");
         cmd = cmd
             .arg("-tt") // Force pseudo-terminal allocation
-            .arg(format!("{}@127.0.0.1", ssh_user))
+            .arg(format!("{ssh_user}@127.0.0.1"))
             .arg("-p")
             .arg(port.to_string())
             .arg("-o")
@@ -196,7 +196,7 @@ impl ProtocolHandler for IrohSsh {
 
         match connection.accept_bi().await {
             Ok((mut iroh_send, mut iroh_recv)) => {
-                println!("Accepted bidirectional stream from {}", node_id);
+                println!("Accepted bidirectional stream from {node_id}");
 
                 match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
                     Ok(mut ssh_stream) => {
@@ -211,20 +211,20 @@ impl ProtocolHandler for IrohSsh {
 
                         tokio::select! {
                             result = a_to_b => {
-                                println!("SSH->Iroh stream ended: {:?}", result);
+                                println!("SSH->Iroh stream ended: {result:?}");
                             },
                             result = b_to_a => {
-                                println!("Iroh->SSH stream ended: {:?}", result);
+                                println!("Iroh->SSH stream ended: {result:?}");
                             },
                         };
                     }
                     Err(e) => {
-                        println!("Failed to connect to SSH server: {}", e);
+                        println!("Failed to connect to SSH server: {e}");
                     }
                 }
             }
             Err(e) => {
-                println!("Failed to accept bidirectional stream: {}", e);
+                println!("Failed to accept bidirectional stream: {e}");
             }
         }
 
@@ -235,7 +235,7 @@ impl ProtocolHandler for IrohSsh {
 pub fn dot_ssh(
     default_secret_key: &SecretKey,
     persist: bool,
-    service: bool,
+    _service: bool,
 ) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
@@ -244,14 +244,14 @@ pub fn dot_ssh(
     // For now linux services are installed as "sudo'er" so
     // we need to use the root .ssh directory
     #[cfg(target_os = "linux")]
-    if service {
+    if _service {
         ssh_dir = std::path::PathBuf::from("/root/.ssh");
     }
 
     // Weird windows System service profile location:
     // "C:\WINDOWS\system32\config\systemprofile\.ssh"
     #[cfg(target_os = "windows")]
-    if service {
+    if _service {
         ssh_dir = std::path::PathBuf::from(r#"C:\WINDOWS\system32\config\systemprofile\.ssh"#);
     }
 
@@ -268,7 +268,7 @@ pub fn dot_ssh(
         (false, true) => {
             std::fs::create_dir_all(&ssh_dir)?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
-            dot_ssh(default_secret_key, persist, service)
+            dot_ssh(default_secret_key, persist, _service)
         }
         (true, true) => {
             // check pub and priv key already exists
@@ -307,11 +307,4 @@ pub fn dot_ssh(
             )
         }
     }
-}
-
-async fn wait_for_relay(endpoint: &Endpoint) -> anyhow::Result<()> {
-    while endpoint.home_relay().initialized().await.is_err() {
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
-    Ok(())
 }

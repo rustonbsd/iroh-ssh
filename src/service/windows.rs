@@ -52,12 +52,12 @@ impl Service for WindowsService {
 
         // NOTE: RUNNING AS LOCAL USER NOT VIRTUAL SERVICE ACCOUNT
         // for some reason: .ssh folder in C:\WINDOWS\system32\config\systemprofile\.ssh
-            Command::new("powershell")
-                .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps1_script])
-                .show(false)
-                .status()
-                .with_context(|| "failed to install service")
-                .map(|_| ())?;
+        Command::new("powershell")
+            .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps1_script])
+            .show(false)
+            .status()
+            .with_context(|| "failed to install service")
+            .map(|_| ())?;
 
         Ok(())
     }
