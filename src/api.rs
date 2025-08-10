@@ -7,14 +7,8 @@ use iroh::{NodeId, SecretKey};
 use crate::{dot_ssh,  IrohSsh};
 
 pub async fn info_mode() -> anyhow::Result<()> {
-    let server_key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,false) {
-        Ok(key) => Some(key),
-        Err(_) => None,
-    };
-    let service_key = match dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,true) {
-        Ok(key) => Some(key),
-        Err(_) => None,
-    };
+    let server_key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,false).ok();
+    let service_key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false,true).ok();
     
     if server_key.is_none()  && service_key.is_none() {
         println!("No keys found, run for server or service:\n  'iroh-ssh server --persist' or '-p' to create it");
@@ -25,7 +19,7 @@ pub async fn info_mode() -> anyhow::Result<()> {
 
     println!("iroh-ssh version {}", env!("CARGO_PKG_VERSION"));
     println!("https://github.com/rustonbsd/iroh-ssh");
-    println!("");
+    println!();
 
     if server_key.is_none() && service_key.is_none() {
         println!("run 'iroh-ssh server --persist' to start the server with persistent keys");
@@ -36,17 +30,17 @@ pub async fn info_mode() -> anyhow::Result<()> {
     }
     
     if let Some(key) = server_key {
-        println!("");
+        println!();
         println!("Your server iroh-ssh nodeid:");
-        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public().to_string());
-        println!("");
+        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
+        println!();
     }
     
     if let Some(key) = service_key {
-        println!("");
+        println!();
         println!("Your service iroh-ssh nodeid:");
-        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public().to_string());
-        println!("");
+        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
+        println!();
     }
     
     Ok(())
@@ -73,7 +67,7 @@ pub mod service {
 }
 
 pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
-    let mut iroh_ssh_builder = IrohSsh::new().accept_incoming(true).accept_port(ssh_port);
+    let mut iroh_ssh_builder = IrohSsh::builder().accept_incoming(true).accept_port(ssh_port);
     if persist {
         iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true,false);
     }
@@ -89,7 +83,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     } else {
         println!("  warning: (using ephemeral keys, run 'iroh-ssh server --persist' to create persistent keys)");
     }
-    println!("");
+    println!();
     println!(
         "client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}",
         ssh_port
@@ -103,7 +97,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
 
 pub async fn client_mode(target: String, identity_file: Option<PathBuf>) -> anyhow::Result<()> {
     let (ssh_user, iroh_node_id) = parse_iroh_target(&target)?;
-    let iroh_ssh = IrohSsh::new().accept_incoming(false).build().await?;
+    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh.connect(&ssh_user, iroh_node_id, identity_file).await?;
 
     ssh_process.wait().await?;
