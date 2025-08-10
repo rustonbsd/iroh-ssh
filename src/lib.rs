@@ -1,15 +1,14 @@
-mod ssh;
-mod service;
 pub mod api;
+mod service;
+mod ssh;
 
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
-use iroh::{protocol::Router, Endpoint};
+use iroh::{Endpoint, protocol::Router};
 
-pub use ssh::dot_ssh;
-pub use service::{install_service,uninstall_service};
-pub use service::ServiceParams;
 pub use service::Service;
-
+pub use service::ServiceParams;
+pub use service::{install_service, uninstall_service};
+pub use ssh::dot_ssh;
 
 #[derive(Debug, Clone)]
 pub struct IrohSsh {
@@ -34,4 +33,3 @@ pub struct Builder {
     accept_incoming: bool,
     accept_port: Option<u16>,
 }
-

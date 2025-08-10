@@ -14,7 +14,9 @@ pub struct ServiceParams {
 }
 
 pub trait Service {
-    fn install(service_params: ServiceParams) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+    fn install(
+        service_params: ServiceParams,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
     fn info() -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
     fn uninstall() -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }
