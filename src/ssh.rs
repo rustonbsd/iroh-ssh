@@ -5,7 +5,9 @@ use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh::{
-    endpoint::Connection, protocol::{ProtocolHandler, Router}, Endpoint, NodeId, SecretKey, Watcher
+    Endpoint, NodeId, SecretKey, Watcher,
+    endpoint::Connection,
+    protocol::{ProtocolHandler, Router},
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -37,13 +39,14 @@ impl Builder {
     }
 
     pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
-        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service) {
+        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service)
+        {
             self.secret_key = secret_key.to_bytes();
         }
         self
     }
 
-    pub async fn build(self: &mut Self) -> anyhow::Result<IrohSsh> {
+    pub async fn build(&mut self) -> anyhow::Result<IrohSsh> {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let endpoint = Endpoint::builder()
@@ -55,14 +58,14 @@ impl Builder {
         wait_for_relay(&endpoint).await?;
 
         let mut iroh_ssh = IrohSsh {
-            public_key: endpoint.node_id().as_bytes().clone(),
+            public_key: *endpoint.node_id().as_bytes(),
             secret_key: self.secret_key,
             inner: None,
             ssh_port: self.accept_port.unwrap_or(22),
         };
 
         let router = if self.accept_incoming {
-            Router::builder(endpoint.clone()).accept(&IrohSsh::ALPN(), iroh_ssh.clone())
+            Router::builder(endpoint.clone()).accept(IrohSsh::ALPN(), iroh_ssh.clone())
         } else {
             Router::builder(endpoint.clone())
         }
@@ -74,21 +77,32 @@ impl Builder {
     }
 }
 
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IrohSsh {
-    pub fn new() -> Builder {
+    pub fn builder() -> Builder {
         Builder::new()
     }
 
     #[allow(non_snake_case)]
     pub fn ALPN() -> Vec<u8> {
-        format!("/iroh/ssh").into_bytes()
+        b"/iroh/ssh".to_vec()
     }
 
     fn add_inner(&mut self, endpoint: Endpoint, router: Router) {
         self.inner = Some(Inner { endpoint, router });
     }
 
-    pub async fn connect(&self, ssh_user: &str, node_id: NodeId, identity_file: Option<PathBuf>) -> anyhow::Result<Child> {
+    pub async fn connect(
+        &self,
+        ssh_user: &str,
+        node_id: NodeId,
+        identity_file: Option<PathBuf>,
+    ) -> anyhow::Result<Child> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
         let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -96,37 +110,35 @@ impl IrohSsh {
 
         tokio::spawn(async move {
             loop {
-                match listener.accept().await {
-                    Ok((mut stream, _)) => match conn.open_bi().await {
-                        Ok((mut iroh_send, mut iroh_recv)) => {
-                            tokio::spawn(async move {
-                                let (mut local_read, mut local_write) = stream.split();
-                                let a_to_b = async move {
-                                    tokio::io::copy(&mut local_read, &mut iroh_send).await
-                                };
-                                let b_to_a = async move {
-                                    tokio::io::copy(&mut iroh_recv, &mut local_write).await
-                                };
+                let _ = handle_next(&listener, &conn).await;
+            }
 
-                                tokio::select! {
-                                    result = a_to_b => {
-                                        let _ = result;
-                                    },
-                                    result = b_to_a => {
-                                        let _ = result;
-                                    },
-                                };
-                            });
-                        }
-                        Err(_) => break,
-                    },
-                    Err(_) => break,
-                }
+            async fn handle_next(listener: &TcpListener, conn: &Connection) -> Result<(), std::io::Error> {
+                let (mut stream, _) = listener.accept().await?;
+                let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
+                tokio::spawn(async move {
+                    let (mut local_read, mut local_write) = stream.split();
+                    let a_to_b =
+                        async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
+                    let b_to_a =
+                        async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
+
+                    tokio::select! {
+                        result = a_to_b => {
+                            let _ = result;
+                        },
+                        result = b_to_a => {
+                            let _ = result;
+                        },
+                    };
+                });
+                Ok(())
             }
         });
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         let mut cmd = &mut Command::new("ssh");
-        cmd = cmd.arg("-tt") // Force pseudo-terminal allocation
+        cmd = cmd
+            .arg("-tt") // Force pseudo-terminal allocation
             .arg(format!("{}@127.0.0.1", ssh_user))
             .arg("-p")
             .arg(port.to_string())
@@ -141,7 +153,8 @@ impl IrohSsh {
             cmd.arg("-i").arg(identity_file);
         }
 
-        let ssh_process = cmd.stdin(Stdio::inherit())
+        let ssh_process = cmd
+            .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()?;
@@ -159,19 +172,17 @@ impl IrohSsh {
 }
 
 impl ProtocolHandler for IrohSsh {
-    async fn accept(
-        &self,
-        connection: Connection,
-    ) -> Result<(), iroh::protocol::AcceptError> {
-
-        let alpn = connection.alpn().ok_or_else(|| iroh::protocol::AcceptError::NotAllowed {  })?;
+    async fn accept(&self, connection: Connection) -> Result<(), iroh::protocol::AcceptError> {
+        let alpn = connection
+            .alpn()
+            .ok_or_else(|| iroh::protocol::AcceptError::NotAllowed {})?;
         if alpn != IrohSsh::ALPN() {
-            return Err(iroh::protocol::AcceptError::NotAllowed {})
+            return Err(iroh::protocol::AcceptError::NotAllowed {});
         }
 
         let node_id = connection.remote_node_id()?;
         println!("{}: {node_id} connected", String::from_utf8_lossy(&alpn));
-    
+
         match connection.accept_bi().await {
             Ok((mut iroh_send, mut iroh_recv)) => {
                 println!("Accepted bidirectional stream from {}", node_id);
@@ -182,12 +193,10 @@ impl ProtocolHandler for IrohSsh {
 
                         let (mut local_read, mut local_write) = ssh_stream.split();
 
-                        let a_to_b = async move {
-                            tokio::io::copy(&mut local_read, &mut iroh_send).await
-                        };
-                        let b_to_a = async move {
-                            tokio::io::copy(&mut iroh_recv, &mut local_write).await
-                        };
+                        let a_to_b =
+                            async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
+                        let b_to_a =
+                            async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
 
                         tokio::select! {
                             result = a_to_b => {
@@ -209,13 +218,14 @@ impl ProtocolHandler for IrohSsh {
         }
 
         Ok(())
-        
     }
 }
 
-
-
-pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> anyhow::Result<SecretKey> {
+pub fn dot_ssh(
+    default_secret_key: &SecretKey,
+    persist: bool,
+    service: bool,
+) -> anyhow::Result<SecretKey> {
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
     let mut ssh_dir = distro_home.join(".ssh");
@@ -239,7 +249,10 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> 
 
     match (ssh_dir.exists(), persist) {
         (false, false) => {
-            bail!("no .ssh folder found in {}, use --persist flag to create it", distro_home.display())
+            bail!(
+                "no .ssh folder found in {}, use --persist flag to create it",
+                distro_home.display()
+            )
         }
         (false, true) => {
             std::fs::create_dir_all(&ssh_dir)?;
@@ -277,13 +290,16 @@ pub fn dot_ssh(default_secret_key: &SecretKey, persist: bool, service: bool) -> 
                     return Ok(SecretKey::from_bytes(&sk_bytes));
                 }
             }
-            bail!("no iroh-ssh keys found in {}, use --persist flag to create it", ssh_dir.display())
+            bail!(
+                "no iroh-ssh keys found in {}, use --persist flag to create it",
+                ssh_dir.display()
+            )
         }
     }
 }
 
 async fn wait_for_relay(endpoint: &Endpoint) -> anyhow::Result<()> {
-    while endpoint.home_relay().initialized().await.is_err(){
+    while endpoint.home_relay().initialized().await.is_err() {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     Ok(())

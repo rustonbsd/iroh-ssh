@@ -53,7 +53,7 @@ impl LinuxService {
                 .replace("[SSHPORT]", &service_params.ssh_port.to_string())
                 .replace(
                     "[BINARYPATH]",
-                    &std::env::current_exe()?
+                    std::env::current_exe()?
                         .to_str()
                         .ok_or_else(|| anyhow::anyhow!("failed to get current executable path"))?,
                 )
