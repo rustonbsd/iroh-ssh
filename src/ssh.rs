@@ -55,7 +55,7 @@ impl Builder {
             .bind()
             .await?;
 
-        endpoint.home_relay().initialized().await;
+        let _ = endpoint.home_relay().initialized().await?;
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.node_id().as_bytes(),

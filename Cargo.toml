@@ -12,7 +12,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1"
-iroh = "0.91.1"
+iroh = "0.90.0"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 rand = "0.8"
 tokio-stream = { version = "0.1.15", features = ["sync"] }
