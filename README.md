@@ -196,9 +196,12 @@ Display its Node ID and share it to allow connection
 > iroh-ssh service uninstall                 # Uninstall service
 
 # Client connection
-> iroh-ssh user@<NODE_ID>            # Connect to remote server
-> iroh-ssh connect user@<NODE_ID>    # Explicit connect command
+> iroh-ssh user@<NODE_ID>                           # Connect to remote server
+> iroh-ssh connect user@<NODE_ID>                   # Explicit connect command
 > iroh-ssh -i ~/.ssh/id_rsa_my_cert user@<NODE_ID>  # Connect with certificate
+> iroh-ssh -L [bind_address:]port:host:hostport user@<NODE_ID>  # Forward connections made to client (bind_addr:port) to server (host:hostport)
+> iroh-ssh -R [bind_address:]port:host:hostport user@<NODE_ID>  # Forward connections made to server (bind_addr:port) to client (host:hostport)
+
 ```
 
 ## Security Model
