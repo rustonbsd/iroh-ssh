@@ -19,8 +19,16 @@ Server:
 
 Connect:
   // Connect to server
-  iroh-ssh -i ~/.ssh/id_rsa_my_cert my-user@6598395384059bf969...
-  iroh-ssh connect my-user@6598395384059bf969...
+  iroh-ssh my-user@6598395384059bf969...
+  or 
+  iroh-ssh connect ...
+
+  // Identity file
+  iroh-ssh -i ~/.ssh/id_rsa_my_cert ...
+
+  // Tunneling
+  iroh-ssh -L localhost:8000:123.45.67.89:9000 ...
+  iroh-ssh -R 123.45.67.89:9000:localhost:8000 ...
 
 Service:
   // Install as service (linux and windows only, uses persistent keys)
@@ -40,13 +48,13 @@ struct Cli {
     #[arg(help = TARGET_HELP)]
     target: Option<String>,
     #[command(flatten)]
-    implicit_connect: ConnectArgs,
+    ssh_args: ConnectArgs,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     #[command(
-        about = "Connect to a remote server - iroh-ssh `connect` my-user@NODE_ID (`connect` is optional)"
+        about = "Connect to a remote server - iroh-ssh `connect` my-user@NODE_ID [command (optional)]"
     )]
     Connect {
         #[arg(help = TARGET_HELP)]
@@ -74,11 +82,23 @@ enum Commands {
 
 #[derive(Args)]
 struct ConnectArgs {
-    #[arg(short, long)]
+    #[arg(
+        short = 'i',
+        long,
+        help = "Selects a file from which the identity (private key) for RSA or DSA authentication is read."
+    )]
     identity_file: Option<PathBuf>,
-    #[arg(short = 'L', long)]
+    #[arg(
+        short = 'L',
+        long,
+        help = "[bind_address:]port:host:hostport - Specifies that the given port on the local (client) host is to be forwarded to the given host and port on the remote side. Only the superuser can forward privileged ports. By default, the local port is bound in accordance with the GatewayPorts setting."
+    )]
     local_forward: Option<String>,
-    #[arg(short = 'R', long)]
+    #[arg(
+        short = 'R',
+        long,
+        help = "[bind_address:]port:host:hostport - Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side. Specifying a remote bind_address will only succeed if the server's GatewayPorts option is enabled in the ssh server config."
+    )]
     remote_forward: Option<String>,
 }
 
@@ -108,9 +128,14 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match (cli.cli_command, cli.target) {
-        (Some(Commands::Connect { target, args, execute_command }), _) => {
-            api::client_mode(args.into_client_options(target), execute_command).await
-        }
+        (
+            Some(Commands::Connect {
+                target,
+                args,
+                execute_command,
+            }),
+            _,
+        ) => api::client_mode(args.into_client_options(target), execute_command).await,
         (Some(Commands::Server { ssh_port, persist }), _) => {
             api::server_mode(ssh_port, persist).await
         }
@@ -120,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
         },
         (Some(Commands::Info {}), _) => api::info_mode().await,
         (None, Some(target)) => {
-            api::client_mode(cli.implicit_connect.into_client_options(target), vec![]).await
+            api::client_mode(cli.ssh_args.into_client_options(target), vec![]).await
         }
         (None, None) => {
             anyhow::bail!("Please provide a target or use the 'connect' subcommand")
