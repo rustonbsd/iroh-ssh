@@ -49,6 +49,8 @@ struct Cli {
     target: Option<String>,
     #[command(flatten)]
     ssh_args: ConnectArgs,
+    #[arg(help = "Command to be executed on the target", trailing_var_arg = true)]
+    execute_command: Option<Vec<String>>,
 }
 
 #[derive(Subcommand)]
@@ -60,7 +62,7 @@ enum Commands {
         #[arg(help = TARGET_HELP)]
         target: String,
         #[command(flatten)]
-        args: ConnectArgs,
+        ssh_args: ConnectArgs,
         #[arg(help = "Command to be executed on the target")]
         execute_command: Vec<String>,
     },
@@ -131,11 +133,11 @@ async fn main() -> anyhow::Result<()> {
         (
             Some(Commands::Connect {
                 target,
-                args,
+                ssh_args,
                 execute_command,
             }),
             _,
-        ) => api::client_mode(args.into_client_options(target), execute_command).await,
+        ) => api::client_mode(ssh_args.into_client_options(target), execute_command).await,
         (Some(Commands::Server { ssh_port, persist }), _) => {
             api::server_mode(ssh_port, persist).await
         }
@@ -145,7 +147,11 @@ async fn main() -> anyhow::Result<()> {
         },
         (Some(Commands::Info {}), _) => api::info_mode().await,
         (None, Some(target)) => {
-            api::client_mode(cli.ssh_args.into_client_options(target), vec![]).await
+            api::client_mode(
+                cli.ssh_args.into_client_options(target),
+                cli.execute_command.unwrap_or_default(),
+            )
+            .await
         }
         (None, None) => {
             anyhow::bail!("Please provide a target or use the 'connect' subcommand")
