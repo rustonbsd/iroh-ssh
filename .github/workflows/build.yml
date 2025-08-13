@@ -1,16 +1,32 @@
-name: Build Linux musl artifact
+name: Build cross-platform artifacts
 
 on:
   push:
-    branches: [build_fix]
+    branches: [build_win]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  build-musl:
-    name: Build x86_64-unknown-linux-musl
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64 (musl)
+            runs-on: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            ext: ""
+          - name: Windows x86_64 (MSVC)
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
+          - name: macOS x86_64
+            runs-on: macos-latest
+            target: x86_64-apple-darwin
+            ext: ""
 
     steps:
       - name: Checkout
@@ -19,14 +35,13 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          key: x86_64-unknown-linux-musl
+          key: ${{ matrix.platform.target }}
 
-      # Build using the "Build Rust projects with cross" action
-      - name: Build with cross (musl)
+      - name: Build with cross
         uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
-          target: x86_64-unknown-linux-musl
+          target: ${{ matrix.platform.target }}
           args: --locked --release
           strip: true
 
@@ -35,28 +50,37 @@ jobs:
         run: |
           set -euo pipefail
           BIN_NAME="iroh-ssh"
-          TARGET="x86_64-unknown-linux-musl"
-          SRC="target/${TARGET}/release/${BIN_NAME}"
+          TARGET="${{ matrix.platform.target }}"
+          EXT="${{ matrix.platform.ext }}"
+          
+          
+          # Determine output extension: keep .exe on Windows, add .linux or .macos for others
+          OUT_EXT="${EXT}"
+          if [ -z "${OUT_EXT}" ]; then
+            if [[ "${TARGET}" == *"linux"* ]]; then
+              OUT_EXT=".linux"
+            elif [[ "${TARGET}" == *"apple-darwin"* ]]; then
+              OUT_EXT=".macos"
+            else
+              OUT_EXT=""
+            fi
+          fi
+
+          SRC="target/${TARGET}/release/${BIN_NAME}${EXT}"
           OUTDIR="dist/${TARGET}"
           mkdir -p "${OUTDIR}"
           if [ ! -f "${SRC}" ]; then
             echo "Built binary not found: ${SRC}"
             exit 1
           fi
-
-          # Optionally rename for clarity
-          cp "${SRC}" "${OUTDIR}/${BIN_NAME}"
-          chmod +x "${OUTDIR}/${BIN_NAME}"
+          cp "${SRC}" "${OUTDIR}/${BIN_NAME}${OUT_EXT}"
+          chmod +x "${OUTDIR}/${BIN_NAME}${OUT_EXT}" || true
           echo "Resulting files:"
           ls -la "${OUTDIR}"
 
-          # Print dynamic deps (should be mostly static if fully musl)
-          echo "ldd output (expected 'not a dynamic executable' for fully static):"
-          ldd "${OUTDIR}/${BIN_NAME}" || true
-
-      - name: Upload musl binary artifact
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iroh-ssh-x86_64-unknown-linux-musl
-          path: dist/x86_64-unknown-linux-musl/*
+          name: iroh-ssh-${{ matrix.platform.target }}
+          path: dist/${{ matrix.platform.target }}/*
           retention-days: 2
