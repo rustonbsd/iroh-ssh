@@ -156,14 +156,14 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 
 ```
 ┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
-│ iroh-ssh    │──▶│ Receptor     │───▶│ Tunel QUIC      │───▶│ servidor    │
+│ iroh-ssh    │───▶│ Receptor     │────▶│ Tunel QUIC      │────▶│ servidor    │
 │ (Su máquina)│    │ Interno TCP  │     │ (Red P2P)       │     │ iroh-ssh    │
 └─────────────┘    │ (Su máquina) │     └─────────────────┘     └─────────────┘
                    └──────────────┘
         │                  ▲                                           │
         ▼                  │                                           ▼
                    ┌──────────────┐                            ┌─────────────┐
-        ⦜   -- ▶  │ corre:   ssh │                            │ Servidor SSH│
+        ⦜   -- ▶   │ corre:   ssh │                            │ Servidor SSH│
                    │ user@localhost                            │ (puerto 22) │
                    └──────────────┘                            └─────────────┘
 ```
