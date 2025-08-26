@@ -1,3 +1,4 @@
+[Español](README_es.md)
 # iroh-ssh
 
 [![Crates.io](https://img.shields.io/crates/v/iroh-ssh.svg)](https://crates.io/crates/iroh-ssh)
@@ -34,7 +35,7 @@ cargo install iroh-ssh
 Download and setup the binary automatically for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
 
 Linux
-```bash 
+```bash
 # Linux
 wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.5/iroh-ssh.linux
 chmod +x iroh-ssh.linux
@@ -66,9 +67,9 @@ Verify that the installation was successful
 
 ---
 
-## Client Connection  
+## Client Connection
 
-```bash
+```bashPor el momento solo s
 # Install for your distro (see above)
 # Connect from anywhere
 > iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
@@ -133,7 +134,7 @@ Display its Node ID and share it to allow connection
 
 ## Connection information
 ```bash
-// note: works only with persistent keys 
+// note: works only with persistent keys
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
@@ -142,7 +143,7 @@ Display its Node ID and share it to allow connection
 
     Your server iroh-ssh nodeid:
       iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    
+
     Your service iroh-ssh nodeid:
       iroh-ssh my-user@4fjeeiui4jdm96005255c3begj389xk3aeaeef6cfebd88344aa8c85e1dbfc1ad
 ```
@@ -168,7 +169,7 @@ Display its Node ID and share it to allow connection
 ```
 
 1. **Client**: Creates local TCP listener, connects system SSH client to it
-2. **Tunnel**: QUIC connection through Iroh's P2P network (automatic NAT traversal)  
+2. **Tunnel**: QUIC connection through Iroh's P2P network (automatic NAT traversal)
 3. **Server**: Proxies connections to local SSH daemon running on (e.g. port localhost:22) (requires ssh server)
 4. **Authentication**: Standard SSH security applies end-to-end. The tunnel is ontop of that an encrypted QUIC connection.
 
@@ -207,14 +208,14 @@ Display its Node ID and share it to allow connection
 ## Security Model
 
 - **Node ID access**: Anyone with the Node ID can reach your SSH port
-- **SSH authentication**: ATM only password auth is supported
+- **SSH authentication**: SSH certificates and password auth are supported
 - **Persistent keys**: Uses dedicated `.ssh/iroh_ssh_ed25519` keypair
 - **QUIC encryption**: Transport layer encryption between endpoints
 
 ## Status
 
 - [x] Password authentication
-- [x] Persistent SSH keys  
+- [x] Persistent SSH keys
 - [x] Linux service mode
 - [x] Add howto gifs
 - [x] Add -p flag for persistence
