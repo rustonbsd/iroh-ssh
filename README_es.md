@@ -1,4 +1,4 @@
-[English](README.md)
+[English](README.md) [Portuguese](README_pt.md)
 # iroh-ssh
 
 [![Crates.io](https://img.shields.io/crates/v/iroh-ssh.svg)](https://crates.io/crates/iroh-ssh)
@@ -158,7 +158,7 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 ┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
 │ iroh-ssh    │───▶│ Receptor     │────▶│ Tunel QUIC      │────▶│ servidor    │
 │ (Su máquina)│    │ Interno TCP  │     │ (Red P2P)       │     │ iroh-ssh    │
-└─────────────┘    │ (Su máquina) │     └─────────────────┘     └─────────────┘
+└─────────────┘    │ (Su Este es un mismo documento en su versión en Ingles y Español. Hacer una versión de en portugués (universal, que favorezca portugués de Brasil, pero entendible en portugués de Portugal). Respetar el inglés existente donde están los comandos y código, tal y  como está en la versión en Español.máquina) │     └─────────────────┘     └─────────────┘
                    └──────────────┘
         │                  ▲                                           │
         ▼                  │                                           ▼
@@ -199,7 +199,6 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 # Conexión de cliente
 > iroh-ssh user@<NODE_ID>                           # Conectarse a un servidor remoto
 > iroh-ssh connect user@<NODE_ID>                   # Comando de conexión explicito
-> iroh-ssh connect user@<NODE_ID>                   # Comando de conexión explicito
 > iroh-ssh -i ~/.ssh/id_rsa_my_cert user@<NODE_ID>  # Conectarse con certificado
 > iroh-ssh -L [bind_address:]port:host:hostport user@<NODE_ID>  # Redireccionamiento de conexión del cliente (bind_addr:port) al servidor (host:hostport)
 > iroh-ssh -R [bind_address:]port:host:hostport user@<NODE_ID>  # Redireccionamiento de conexión del servidor (bind_addr:port) al cliente (host:hostport)
@@ -222,7 +221,7 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 - [x] Adicionar la opción -p para persistencia
 - [x] Modo servicio en Windows
 - [x] Soporte de certificados (opción `-i`)
-- [x] Modo servicio en MacOS
+- [ ] Modo servicio en MacOS
 - [ ] Funcionalidades adicionales SSH
 
 ## Licencia
