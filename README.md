@@ -156,14 +156,14 @@ Display its Node ID and share it to allow connection
 
 ```
 ┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
-│ iroh-ssh    │───▶│ internal TCP │───▶│ QUIC Tunnel     │───▶│ iroh-ssh    │
+│ iroh-ssh    │───▶│ internal TCP │────▶│ QUIC Tunnel     │────▶│ iroh-ssh    │
 │ (your machine)   │    Listener  │     │ (P2P Network)   │     │ server      │
 └─────────────┘    | (your machine)     └─────────────────┘     └─────────────┘
                    └──────────────┘
         │                  ▲                                           │
         ▼                  │                                           ▼
                    ┌──────────────┐                            ┌─────────────┐
-        ⦜   -- ▶  │ run:     ssh │                            │ SSH Server  │
+        ⦜   -- ▶   │ run:     ssh │                            │ SSH Server  │
                    │ user@localhost                            │ (port 22)   │
                    └──────────────┘                            └─────────────┘
 ```
