@@ -1,4 +1,4 @@
-[Español](README_es.md)
+[Español](README_es.md) [Portuguese](README_pt.md)
 # iroh-ssh
 
 [![Crates.io](https://img.shields.io/crates/v/iroh-ssh.svg)](https://crates.io/crates/iroh-ssh)
