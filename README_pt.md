@@ -79,8 +79,6 @@ Funciona através de qualquer firewall, NAT ou rede privada. Nenhuma configuraç
 
 ![Conectando ao servidor remoto](/media/t-rec_connect.gif)
 <br>
-(**vídeo um pouco desatualizado**)
-
 
 ---
 
@@ -130,7 +128,6 @@ Exiba seu ID de nó e compartilhe-o para permitir a conexão
 
 ![Iniciando o servidor/Instalando como serviço](/media/t-rec_server_service.gif)
 <br>
-(**vídeo um pouco desatualizado**)
 
 ## Informações da conexão
 ```bash
