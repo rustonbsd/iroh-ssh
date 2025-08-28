@@ -79,8 +79,6 @@ Works through any firewall, NAT, or private network. No configuration needed.
 
 ![Connecting to remote server](/media/t-rec_connect.gif)
 <br>
-(**video slightly out of date**)
-
 
 ---
 
@@ -130,7 +128,6 @@ Display its Node ID and share it to allow connection
 
 ![Starting server/Installing as service](/media/t-rec_server_service.gif)
 <br>
-(**video slightly out of date**)
 
 ## Connection information
 ```bash
