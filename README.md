@@ -69,7 +69,7 @@ Verify that the installation was successful
 
 ## Client Connection
 
-```bashPor el momento solo s
+```bash
 # Install for your distro (see above)
 # Connect from anywhere
 > iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
