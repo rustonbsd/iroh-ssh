@@ -1,10 +1,12 @@
-use std::{path::PathBuf, str::FromStr as _};
+use std::str::FromStr as _;
 
 use anyhow::bail;
 use homedir::my_home;
 use iroh::{NodeId, SecretKey};
 
-use crate::{IrohSsh, dot_ssh};
+use crate::{
+    cli::{ConnectArgs, ProxyArgs, ServerArgs}, dot_ssh, IrohSsh
+};
 
 pub async fn info_mode() -> anyhow::Result<()> {
     let server_key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false, false).ok();
@@ -68,11 +70,11 @@ pub mod service {
     }
 }
 
-pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
+pub async fn server_mode(server_args: ServerArgs) -> anyhow::Result<()> {
     let mut iroh_ssh_builder = IrohSsh::builder()
         .accept_incoming(true)
-        .accept_port(ssh_port);
-    if persist {
+        .accept_port(server_args.ssh_port);
+    if server_args.persist {
         iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, false);
     }
     let iroh_ssh = iroh_ssh_builder.build().await?;
@@ -83,7 +85,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
         whoami::username(),
         iroh_ssh.node_id()
     );
-    if persist {
+    if server_args.persist {
         let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
         let ssh_dir = distro_home.join(".ssh");
         println!("  (using persistent keys in {})", ssh_dir.display());
@@ -93,7 +95,7 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
         );
     }
     println!();
-    println!("client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{ssh_port}");
+    println!("client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}", server_args.ssh_port);
 
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
@@ -101,32 +103,23 @@ pub async fn server_mode(ssh_port: u16, persist: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub struct ClientOptions {
-    pub target: String,
-    pub identity_file: Option<PathBuf>,
-    pub local_forward: Option<String>,
-    pub remote_forward: Option<String>,
+pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
+    let iroh_ssh = IrohSsh::builder()
+        .accept_incoming(false)
+        .build()
+        .await?;
+    iroh_ssh.connect(NodeId::from_str(&proxy_args.node_id)?).await
 }
 
 pub async fn client_mode(
-    client_options: ClientOptions,
-    execute_command: Vec<String>,
+    connect_args: ConnectArgs,
 ) -> anyhow::Result<()> {
-    let (ssh_user, iroh_node_id) = parse_iroh_target(&client_options.target)?;
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh
-        .connect(&ssh_user, iroh_node_id, client_options, execute_command)
+        .start_ssh(connect_args.target, connect_args.ssh, connect_args.remote_cmd)
         .await?;
 
     ssh_process.wait().await?;
 
     Ok(())
-}
-
-fn parse_iroh_target(target: &str) -> anyhow::Result<(String, NodeId)> {
-    let (user, node_id_str) = target
-        .split_once('@')
-        .ok_or_else(|| anyhow::anyhow!("Invalid format, use user@node_id"))?;
-    let node_id = NodeId::from_str(node_id_str)?;
-    Ok((user.to_string(), node_id))
 }
