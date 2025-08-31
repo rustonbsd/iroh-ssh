@@ -1,5 +1,5 @@
-use crate::{Builder, Inner, IrohSsh, api::ClientOptions};
-use std::process::Stdio;
+use crate::{cli::SshOpts, Builder, Inner, IrohSsh};
+use std::{ffi::OsString, process::Stdio};
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
@@ -10,7 +10,7 @@ use iroh::{
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
     process::{Child, Command},
 };
 
@@ -97,72 +97,62 @@ impl IrohSsh {
         self.inner = Some(Inner { endpoint, router });
     }
 
-    pub async fn connect(
-        &self,
-        ssh_user: &str,
-        node_id: NodeId,
-        client_options: ClientOptions,
-        execute_command: Vec<String>,
-    ) -> anyhow::Result<Child> {
-        let inner = self.inner.as_ref().expect("inner not set");
-        let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let port = listener.local_addr()?.port();
+    pub async fn start_ssh(&self, target: String, ssh_opts: SshOpts, remote_cmd: Vec<OsString>) -> anyhow::Result<Child> {
+        let c_exe = std::env::current_exe()?;
+        let cmd = &mut Command::new("ssh");
+        
+        cmd.arg("-o").arg(format!(
+            "ProxyCommand={} proxy %h",
+            c_exe.display()
+        ));
 
-        tokio::spawn(async move {
-            loop {
-                let _ = handle_next(&listener, &conn).await;
-            }
-
-            async fn handle_next(
-                listener: &TcpListener,
-                conn: &Connection,
-            ) -> Result<(), std::io::Error> {
-                let (mut stream, _) = listener.accept().await?;
-                let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
-                tokio::spawn(async move {
-                    let (mut local_read, mut local_write) = stream.split();
-                    let a_to_b =
-                        async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
-                    let b_to_a =
-                        async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
-
-                    tokio::select! {
-                        result = a_to_b => {
-                            let _ = result;
-                        },
-                        result = b_to_a => {
-                            let _ = result;
-                        },
-                    };
-                });
-                Ok(())
-            }
-        });
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let mut cmd = &mut Command::new("ssh");
-        cmd = cmd
-            .arg("-tt") // Force pseudo-terminal allocation
-            .arg(format!("{ssh_user}@127.0.0.1"))
-            .arg("-p")
-            .arg(port.to_string())
-            .arg("-o")
-            .arg("StrictHostKeyChecking=no")
-            .arg("-o")
-            .arg("UserKnownHostsFile=/dev/null")
-            .arg("-o")
-            .arg("LogLevel=ERROR"); // Reduce SSH debug output
-
-        if let Some(identity_file) = client_options.identity_file {
-            cmd.arg("-i").arg(identity_file);
+        if let Some(p) = ssh_opts.port {
+            cmd.arg("-p").arg(p.to_string());
         }
-        if let Some(local_forward) = client_options.local_forward {
-            cmd.arg("-L").arg(local_forward);
+        if let Some(id) = &ssh_opts.identity_file {
+            cmd.arg("-i").arg(id);
         }
-        if let Some(remote_forward) = client_options.remote_forward {
-            cmd.arg("-R").arg(remote_forward);
+        for l in &ssh_opts.local_forward {
+            cmd.arg("-L").arg(l);
         }
-        cmd.arg(execute_command.join(" "));
+        for r in &ssh_opts.remote_forward {
+            cmd.arg("-R").arg(r);
+        }
+        for o in &ssh_opts.options {
+            cmd.arg("-o").arg(o);
+        }
+        if ssh_opts.agent {
+            cmd.arg("-A");
+        }
+        if ssh_opts.no_agent {
+            cmd.arg("-a");
+        }
+        if ssh_opts.x11_trusted {
+            cmd.arg("-Y");
+        } else if ssh_opts.x11 {
+            cmd.arg("-X");
+        }
+        if ssh_opts.no_cmd {
+            cmd.arg("-N");
+        }
+        if ssh_opts.force_tty {
+            cmd.arg("-t");
+        }
+        if ssh_opts.no_tty {
+            cmd.arg("-T");
+        }
+        for _ in 0..ssh_opts.verbose {
+            cmd.arg("-v");
+        }
+        if ssh_opts.quiet {
+            cmd.arg("-q");
+        }
+
+        cmd.arg(target);
+
+        if !remote_cmd.is_empty() {
+            cmd.args(remote_cmd.iter());
+        }
 
         let ssh_process = cmd
             .stdin(Stdio::inherit())
@@ -171,6 +161,26 @@ impl IrohSsh {
             .spawn()?;
 
         Ok(ssh_process)
+    }
+
+    pub async fn connect(&self, node_id: NodeId) -> anyhow::Result<()> {
+        println!("proxying...");
+        let inner = self.inner.as_ref().expect("inner not set");
+        let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
+        let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
+        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
+        let a_to_b = async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
+        let b_to_a = async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
+
+        tokio::select! {
+            result = a_to_b => {
+                let _ = result;
+            },
+            result = b_to_a => {
+                let _ = result;
+            },
+        };
+        Ok(())
     }
 
     pub fn node_id(&self) -> NodeId {
@@ -187,10 +197,6 @@ impl ProtocolHandler for IrohSsh {
         let alpn = connection
             .alpn()
             .ok_or_else(|| iroh::protocol::AcceptError::NotAllowed {})?;
-        if alpn != IrohSsh::ALPN() {
-            return Err(iroh::protocol::AcceptError::NotAllowed {});
-        }
-
         let node_id = connection.remote_node_id()?;
         println!("{}: {node_id} connected", String::from_utf8_lossy(&alpn));
 
