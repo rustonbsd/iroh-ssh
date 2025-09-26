@@ -205,7 +205,7 @@ Display its Node ID and share it to allow connection
 ## Security Model
 
 - **Node ID access**: Anyone with the Node ID can reach your SSH port
-- **SSH authentication**: SSH certificates and password auth are supported
+- **SSH authentication**: SSH key file, certificate and password auth are supported
 - **Persistent keys**: Uses dedicated `.ssh/iroh_ssh_ed25519` keypair
 - **QUIC encryption**: Transport layer encryption between endpoints
 
