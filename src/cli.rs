@@ -1,14 +1,11 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{command, ArgAction, Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand, command};
 
 const TARGET_HELP: &str = "Target in the form user@NODE_ID";
 
 #[derive(Parser)]
-#[command(
-    name = "iroh-ssh",
-    about = "ssh without ip",
-)]
+#[command(name = "iroh-ssh", about = "ssh without ip")]
 pub struct Cli {
     #[command(subcommand)]
     pub cmd: Option<Cmd>,
@@ -26,6 +23,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Cmd {
     Connect(ConnectArgs),
+    #[command(hide = true)]
     Exec(ExecArgs),
     Server(ServerArgs),
     Service {
@@ -33,7 +31,10 @@ pub enum Cmd {
         op: ServiceCmd,
     },
     Info,
+    #[command(hide = true)]
     Proxy(ProxyArgs),
+    #[command(hide = true)]
+    RunService(ServiceArgs),
 }
 
 #[derive(Args, Clone)]
@@ -68,8 +69,12 @@ pub struct ExecArgs {
 
 #[derive(Args, Clone, Default)]
 pub struct SshOpts {
-    #[arg(short = 'i', long, value_name = "PATH",
-        help = "Identity file for publickey auth")]
+    #[arg(
+        short = 'i',
+        long,
+        value_name = "PATH",
+        help = "Identity file for publickey auth"
+    )]
     pub identity_file: Option<PathBuf>,
 
     #[arg(short = 'L', value_name = "LPORT:HOST:RPORT",
@@ -80,8 +85,12 @@ pub struct SshOpts {
         help = "Remote forward [bind_addr:]rport:host:lport  (host can't be node_id yet)", action = ArgAction::Append)]
     pub remote_forward: Vec<String>,
 
-    #[arg(short = 'p', long, value_name = "PORT",
-        help = "Remote sshd port (default 22)")]
+    #[arg(
+        short = 'p',
+        long,
+        value_name = "PORT",
+        help = "Remote sshd port (default 22)"
+    )]
     pub port: Option<u16>,
 
     #[arg(short = 'o', value_name = "KEY=VALUE",
@@ -133,4 +142,10 @@ pub enum ServiceCmd {
         ssh_port: u16,
     },
     Uninstall,
+}
+
+#[derive(Args, Clone)]
+pub struct ServiceArgs {
+    #[arg(long, default_value = "22")]
+    pub ssh_port: u16,
 }

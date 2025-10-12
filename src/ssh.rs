@@ -1,4 +1,4 @@
-use crate::{cli::SshOpts, Builder, Inner, IrohSsh};
+use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
 use std::{ffi::OsString, process::Stdio};
 
 use anyhow::bail;
@@ -39,9 +39,28 @@ impl Builder {
     }
 
     pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
-        if let Ok(secret_key) = dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service)
-        {
-            self.secret_key = secret_key.to_bytes();
+        tracing::info!(
+            "dot_ssh_integration: persist={}, service={}",
+            persist,
+            service
+        );
+
+        match dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service) {
+            Ok(secret_key) => {
+                tracing::info!("dot_ssh_integration: Successfully loaded/created SSH keys");
+                self.secret_key = secret_key.to_bytes();
+            }
+            Err(e) => {
+                tracing::error!(
+                    "dot_ssh_integration: Failed to load/create SSH keys: {:#}",
+                    e
+                );
+                eprintln!(
+                    "Warning: Failed to load/create persistent SSH keys: {:#}",
+                    e
+                );
+                eprintln!("Continuing with ephemeral keys...");
+            }
         }
         self
     }
@@ -97,14 +116,17 @@ impl IrohSsh {
         self.inner = Some(Inner { endpoint, router });
     }
 
-    pub async fn start_ssh(&self, target: String, ssh_opts: SshOpts, remote_cmd: Vec<OsString>) -> anyhow::Result<Child> {
+    pub async fn start_ssh(
+        &self,
+        target: String,
+        ssh_opts: SshOpts,
+        remote_cmd: Vec<OsString>,
+    ) -> anyhow::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let cmd = &mut Command::new("ssh");
-        
-        cmd.arg("-o").arg(format!(
-            "ProxyCommand={} proxy %h",
-            c_exe.display()
-        ));
+
+        cmd.arg("-o")
+            .arg(format!("ProxyCommand={} proxy %h", c_exe.display()));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());
@@ -243,6 +265,12 @@ pub fn dot_ssh(
     persist: bool,
     _service: bool,
 ) -> anyhow::Result<SecretKey> {
+    tracing::info!(
+        "dot_ssh: Function called, persist={}, service={}",
+        persist,
+        _service
+    );
+
     let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
     let mut ssh_dir = distro_home.join(".ssh");
@@ -254,31 +282,51 @@ pub fn dot_ssh(
         ssh_dir = std::path::PathBuf::from("/root/.ssh");
     }
 
-    // Weird windows System service profile location:
-    // "C:\WINDOWS\system32\config\systemprofile\.ssh"
+    // Windows virtual service account profile location for NT SERVICE\iroh-ssh
     #[cfg(target_os = "windows")]
     if _service {
-        ssh_dir = std::path::PathBuf::from(r#"C:\WINDOWS\system32\config\systemprofile\.ssh"#);
+        ssh_dir = std::path::PathBuf::from(crate::service::WindowsService::SERVICE_SSH_DIR);
+        tracing::info!("dot_ssh: Using service SSH dir: {}", ssh_dir.display());
+
+        // Ensure directory exists when running as service
+        if !ssh_dir.exists() {
+            tracing::info!("dot_ssh: Service SSH dir doesn't exist, creating it");
+            std::fs::create_dir_all(&ssh_dir)?;
+        }
     }
 
     let pub_key = ssh_dir.join("irohssh_ed25519.pub");
     let priv_key = ssh_dir.join("irohssh_ed25519");
 
+    tracing::debug!("dot_ssh: ssh_dir exists = {}", ssh_dir.exists());
+    tracing::debug!("dot_ssh: pub_key path = {}", pub_key.display());
+    tracing::debug!("dot_ssh: priv_key path = {}", priv_key.display());
+
     match (ssh_dir.exists(), persist) {
         (false, false) => {
+            tracing::error!(
+                "dot_ssh: ssh_dir does not exist and persist=false: {}",
+                ssh_dir.display()
+            );
             bail!(
                 "no .ssh folder found in {}, use --persist flag to create it",
                 distro_home.display()
             )
         }
         (false, true) => {
+            tracing::info!("dot_ssh: Creating ssh_dir: {}", ssh_dir.display());
             std::fs::create_dir_all(&ssh_dir)?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
             dot_ssh(default_secret_key, persist, _service)
         }
         (true, true) => {
+            tracing::info!("dot_ssh: Branch (true, true) - directory exists, persist enabled");
+            tracing::debug!("dot_ssh: pub_key.exists() = {}", pub_key.exists());
+            tracing::debug!("dot_ssh: priv_key.exists() = {}", priv_key.exists());
+
             // check pub and priv key already exists
             if pub_key.exists() && priv_key.exists() {
+                tracing::info!("dot_ssh: Keys exist, reading them");
                 // read secret key
                 if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
                     let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
@@ -288,12 +336,42 @@ pub fn dot_ssh(
                     bail!("failed to read secret key from {}", priv_key.display())
                 }
             } else {
+                tracing::info!("dot_ssh: Keys don't exist, creating new keys");
+                tracing::debug!("dot_ssh: Writing to pub_key: {}", pub_key.display());
+                tracing::debug!("dot_ssh: Writing to priv_key: {}", priv_key.display());
+
                 let key = default_secret_key.clone();
                 let secret_key = key.secret();
                 let public_key = key.public();
 
-                std::fs::write(pub_key, z32::encode(public_key.as_bytes()))?;
-                std::fs::write(priv_key, z32::encode(secret_key.as_bytes()))?;
+                match std::fs::write(&pub_key, z32::encode(public_key.as_bytes())) {
+                    Ok(_) => {
+                        tracing::info!("dot_ssh: Successfully wrote pub_key");
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "dot_ssh: Failed to write pub_key: {} (error kind: {:?})",
+                            e,
+                            e.kind()
+                        );
+                        return Err(e.into());
+                    }
+                }
+
+                match std::fs::write(&priv_key, z32::encode(secret_key.as_bytes())) {
+                    Ok(_) => {
+                        tracing::info!("dot_ssh: Successfully wrote priv_key");
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "dot_ssh: Failed to write priv_key: {} (error kind: {:?})",
+                            e,
+                            e.kind()
+                        );
+                        return Err(e.into());
+                    }
+                }
+
                 Ok(key)
             }
         }
