@@ -5,7 +5,9 @@ use homedir::my_home;
 use iroh::{NodeId, SecretKey};
 
 use crate::{
-    cli::{ConnectArgs, ProxyArgs, ServerArgs}, dot_ssh, IrohSsh
+    IrohSsh,
+    cli::{ConnectArgs, ProxyArgs, ServerArgs},
+    dot_ssh,
 };
 
 pub async fn info_mode() -> anyhow::Result<()> {
@@ -55,7 +57,6 @@ pub mod service {
 
     pub async fn install(ssh_port: u16) -> anyhow::Result<()> {
         if install_service(ServiceParams { ssh_port }).await.is_err() {
-            println!("service install is only supported on linux and windows");
             anyhow::bail!("service install is only supported on linux and windows");
         }
         Ok(())
@@ -70,12 +71,12 @@ pub mod service {
     }
 }
 
-pub async fn server_mode(server_args: ServerArgs) -> anyhow::Result<()> {
+pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Result<()> {
     let mut iroh_ssh_builder = IrohSsh::builder()
         .accept_incoming(true)
         .accept_port(server_args.ssh_port);
     if server_args.persist {
-        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, false);
+        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service);
     }
     let iroh_ssh = iroh_ssh_builder.build().await?;
 
@@ -95,7 +96,10 @@ pub async fn server_mode(server_args: ServerArgs) -> anyhow::Result<()> {
         );
     }
     println!();
-    println!("client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}", server_args.ssh_port);
+    println!(
+        "client -> iroh-ssh -> direct connect -> iroh-ssh -> local ssh :{}",
+        server_args.ssh_port
+    );
 
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
@@ -104,19 +108,20 @@ pub async fn server_mode(server_args: ServerArgs) -> anyhow::Result<()> {
 }
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
-    let iroh_ssh = IrohSsh::builder()
-        .accept_incoming(false)
-        .build()
-        .await?;
-    iroh_ssh.connect(NodeId::from_str(&proxy_args.node_id)?).await
+    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
+    iroh_ssh
+        .connect(NodeId::from_str(&proxy_args.node_id)?)
+        .await
 }
 
-pub async fn client_mode(
-    connect_args: ConnectArgs,
-) -> anyhow::Result<()> {
+pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
     let mut ssh_process = iroh_ssh
-        .start_ssh(connect_args.target, connect_args.ssh, connect_args.remote_cmd)
+        .start_ssh(
+            connect_args.target,
+            connect_args.ssh,
+            connect_args.remote_cmd,
+        )
         .await?;
 
     ssh_process.wait().await?;
