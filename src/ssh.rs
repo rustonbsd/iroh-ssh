@@ -5,7 +5,7 @@ use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh::{
-    Endpoint, NodeId, SecretKey, Watcher,
+    Endpoint, NodeId, SecretKey,
     endpoint::Connection,
     protocol::{ProtocolHandler, Router},
 };
@@ -17,7 +17,7 @@ use tokio::{
 impl Builder {
     pub fn new() -> Self {
         Self {
-            secret_key: SecretKey::generate(rand::rngs::OsRng).to_bytes(),
+            secret_key: SecretKey::generate(&mut rand::rng()).to_bytes(),
             accept_incoming: false,
             accept_port: None,
         }
@@ -73,8 +73,6 @@ impl Builder {
             .discovery_n0()
             .bind()
             .await?;
-
-        let _ = endpoint.home_relay().initialized().await?;
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.node_id().as_bytes(),
@@ -186,7 +184,6 @@ impl IrohSsh {
     }
 
     pub async fn connect(&self, node_id: NodeId) -> anyhow::Result<()> {
-        println!("proxying...");
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
@@ -216,11 +213,7 @@ impl IrohSsh {
 
 impl ProtocolHandler for IrohSsh {
     async fn accept(&self, connection: Connection) -> Result<(), iroh::protocol::AcceptError> {
-        let alpn = connection
-            .alpn()
-            .ok_or_else(|| iroh::protocol::AcceptError::NotAllowed {})?;
         let node_id = connection.remote_node_id()?;
-        println!("{}: {node_id} connected", String::from_utf8_lossy(&alpn));
 
         match connection.accept_bi().await {
             Ok((mut iroh_send, mut iroh_recv)) => {

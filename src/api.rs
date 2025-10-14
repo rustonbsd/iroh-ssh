@@ -11,8 +11,8 @@ use crate::{
 };
 
 pub async fn info_mode() -> anyhow::Result<()> {
-    let server_key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false, false).ok();
-    let service_key = dot_ssh(&SecretKey::generate(rand::rngs::OsRng), false, true).ok();
+    let server_key = dot_ssh(&SecretKey::generate(&mut rand::rng()), false, false).ok();
+    let service_key = dot_ssh(&SecretKey::generate(&mut rand::rng()), false, true).ok();
 
     if server_key.is_none() && service_key.is_none() {
         println!(
@@ -109,9 +109,14 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
-    iroh_ssh
-        .connect(NodeId::from_str(&proxy_args.node_id)?)
-        .await
+    let node_id = NodeId::from_str(if proxy_args.node_id.len() == 64 {
+        &proxy_args.node_id
+    } else if proxy_args.node_id.len() > 64 {
+        &proxy_args.node_id[proxy_args.node_id.len() - 64..]
+    } else {
+        return Err(anyhow::anyhow!("invalid node id length"));
+    })?;
+    iroh_ssh.connect(node_id).await
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {

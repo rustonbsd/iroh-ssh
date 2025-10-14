@@ -34,7 +34,6 @@ pub trait Service {
     fn uninstall() -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }
 
-#[allow(unused)]
 pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
     match std::env::consts::OS {
         #[cfg(target_os = "linux")]

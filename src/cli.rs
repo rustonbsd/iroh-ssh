@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, command};
 
 const TARGET_HELP: &str = "Target in the form user@NODE_ID";
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
 pub struct Cli {
     #[command(subcommand)]
@@ -20,7 +20,7 @@ pub struct Cli {
     pub remote_cmd: Option<Vec<OsString>>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand,Debug)]
 pub enum Cmd {
     Connect(ConnectArgs),
     #[command(hide = true)]
@@ -37,13 +37,13 @@ pub enum Cmd {
     RunService(ServiceArgs),
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct ProxyArgs {
     #[arg(help = "Proxy node ID")]
     pub node_id: String,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct ConnectArgs {
     #[arg(help = TARGET_HELP)]
     pub target: String,
@@ -55,7 +55,7 @@ pub struct ConnectArgs {
     pub remote_cmd: Vec<OsString>,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct ExecArgs {
     #[arg(help = TARGET_HELP)]
     pub target: String,
@@ -67,7 +67,7 @@ pub struct ExecArgs {
     pub remote_cmd: Vec<OsString>,
 }
 
-#[derive(Args, Clone, Default)]
+#[derive(Args, Clone, Default, Debug)]
 pub struct SshOpts {
     #[arg(
         short = 'i',
@@ -126,7 +126,7 @@ pub struct SshOpts {
     pub quiet: bool,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct ServerArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
@@ -135,7 +135,7 @@ pub struct ServerArgs {
     pub persist: bool,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum ServiceCmd {
     Install {
         #[arg(long, default_value = "22")]
@@ -144,7 +144,7 @@ pub enum ServiceCmd {
     Uninstall,
 }
 
-#[derive(Args, Clone)]
+#[derive(Args, Clone, Debug)]
 pub struct ServiceArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
