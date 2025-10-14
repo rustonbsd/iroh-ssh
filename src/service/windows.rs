@@ -3,6 +3,9 @@ use crate::{Service, ServiceParams};
 use anyhow::{Context, anyhow, bail};
 
 #[cfg(target_os = "windows")]
+mod firewall;
+
+#[cfg(target_os = "windows")]
 use std::{
     ffi::{OsStr, OsString, c_void},
     fs, io, iter, mem,
@@ -119,6 +122,10 @@ impl WindowsService {
     fn install_blocking(service_params: ServiceParams) -> anyhow::Result<()> {
         let staged_binary = Self::stage_binary().context("failed to stage service binary")?;
 
+        tracing::info!("Adding Windows Firewall rules for service executable");
+        firewall::add_firewall_rules(&staged_binary)
+            .context("failed to add Windows Firewall rules - ensure running as administrator")?;
+
         let service = Self::create_or_configure_service(&staged_binary, &service_params)
             .context("failed to create or configure windows service")?;
 
@@ -145,6 +152,11 @@ impl WindowsService {
     fn uninstall_blocking() -> anyhow::Result<()> {
         Self::remove_service().context("failed to remove windows service")?;
 
+        // Remove Windows Firewall rules (ignore errors on cleanup)
+        tracing::info!("Removing Windows Firewall rules for service");
+        if let Err(e) = firewall::remove_firewall_rules() {
+            tracing::warn!("Failed to remove firewall rules (may not exist): {}", e);
+        }
         let staged_binary = Path::new(Self::INSTALL_ROOT).join(Self::SERVICE_BINARY_NAME);
         match fs::remove_file(&staged_binary) {
             Ok(_) => {}
