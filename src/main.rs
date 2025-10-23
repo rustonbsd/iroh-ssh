@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Cmd::Server(args)) => api::server_mode(args, false).await,
         Some(Cmd::Service { op }) => {
-            if self_runas::is_elevated() == false {
+            if !self_runas::is_elevated() {
                 self_runas::admin()?;
                 return Ok(())
             } else {

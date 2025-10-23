@@ -37,7 +37,7 @@ Download and setup the binary automatically for your operating system from [GitH
 Linux
 ```bash
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
@@ -45,7 +45,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 ```
@@ -53,7 +53,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -135,7 +135,7 @@ Display its Node ID and share it to allow connection
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.4
+    iroh-ssh version 0.2.7
     https://github.com/rustonbsd/iroh-ssh
 
     Your server iroh-ssh nodeid:
@@ -194,12 +194,8 @@ Display its Node ID and share it to allow connection
 > iroh-ssh service uninstall                 # Uninstall service
 
 # Client connection
-> iroh-ssh user@<NODE_ID>                           # Connect to remote server
-> iroh-ssh connect user@<NODE_ID>                   # Explicit connect command
-> iroh-ssh -i ~/.ssh/id_rsa_my_cert user@<NODE_ID>  # Connect with certificate
-> iroh-ssh -L [bind_address:]port:host:hostport user@<NODE_ID>  # Forward connections made to client (bind_addr:port) to server (host:hostport)
-> iroh-ssh -R [bind_address:]port:host:hostport user@<NODE_ID>  # Forward connections made to server (bind_addr:port) to client (host:hostport)
-
+> iroh-ssh user@<NODE_ID>                    # Connect to remote server
+> iroh-ssh connect user@<NODE_ID>            # Explicit connect command, works with all standard ssh params and flags
 ```
 
 ## Security Model
@@ -217,9 +213,8 @@ Display its Node ID and share it to allow connection
 - [x] Add howto gifs
 - [x] Add -p flag for persistence
 - [x] Windows service mode
-- [x] Certificate support (`-i` flag)
+- [x] (almost) all ssh commands supported
 - [ ] MacOS service mode
-- [ ] Additional SSH features
 
 ## License
 

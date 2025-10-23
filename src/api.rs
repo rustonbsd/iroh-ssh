@@ -2,7 +2,7 @@ use std::str::FromStr as _;
 
 use anyhow::bail;
 use homedir::my_home;
-use iroh::{NodeId, SecretKey};
+use iroh::{EndpointId, SecretKey};
 
 use crate::{
     IrohSsh,
@@ -109,14 +109,14 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
-    let node_id = NodeId::from_str(if proxy_args.node_id.len() == 64 {
+    let endpoint_id = EndpointId::from_str(if proxy_args.node_id.len() == 64 {
         &proxy_args.node_id
     } else if proxy_args.node_id.len() > 64 {
         &proxy_args.node_id[proxy_args.node_id.len() - 64..]
     } else {
         return Err(anyhow::anyhow!("invalid node id length"));
     })?;
-    iroh_ssh.connect(node_id).await
+    iroh_ssh.connect(endpoint_id).await
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
