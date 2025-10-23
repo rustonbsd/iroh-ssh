@@ -195,11 +195,7 @@ Exiba seu ID de nó e compartilhe-o para permitir a conexão
 
 # Conexão do cliente
 > iroh-ssh user@<NODE_ID>                           # Conectar-se a um servidor remoto
-> iroh-ssh connect user@<NODE_ID>                   # Comando de conexão explícito
-> iroh-ssh -i ~/.ssh/id_rsa_my_cert user@<NODE_ID>  # Conectar-se com certificado
-> iroh-ssh -L [bind_address:]port:host:hostport user@<NODE_ID>  # Redirecionamento de conexão do cliente (bind_addr:port) para o servidor (host:hostport)
-> iroh-ssh -R [bind_address:]port:host:hostport user@<NODE_ID>  # Redirecionamento de conexão do servidor (bind_addr:port) para o cliente (host:hostport)
-
+> iroh-ssh connect user@<NODE_ID>                   # Comando de conexão explícito, funciona com todos os parâmetros e flags ssh padrão
 ```
 
 ## Modelo de segurança
@@ -217,9 +213,8 @@ Exiba seu ID de nó e compartilhe-o para permitir a conexão
 - [x] Adicionar gifs com exemplos
 - [x] Adicionar flag -p para persistência
 - [x] Modo serviço no Windows
-- [x] Suporte a certificados (flag -i)
+- [x] (quase) todos os comandos ssh suportados
 - [ ] Modo serviço no macOS
-- [ ] Recursos SSH adicionais
 
 ## Licença
 

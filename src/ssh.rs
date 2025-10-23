@@ -5,9 +5,7 @@ use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh::{
-    Endpoint, NodeId, SecretKey,
-    endpoint::Connection,
-    protocol::{ProtocolHandler, Router},
+    endpoint::Connection, protocol::{ProtocolHandler, Router}, Endpoint, EndpointId, SecretKey
 };
 use tokio::{
     net::TcpStream,
@@ -56,8 +54,7 @@ impl Builder {
                     e
                 );
                 eprintln!(
-                    "Warning: Failed to load/create persistent SSH keys: {:#}",
-                    e
+                    "Warning: Failed to load/create persistent SSH keys: {e:#}"
                 );
                 eprintln!("Continuing with ephemeral keys...");
             }
@@ -70,12 +67,11 @@ impl Builder {
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let endpoint = Endpoint::builder()
             .secret_key(secret_key)
-            .discovery_n0()
             .bind()
             .await?;
 
         let mut iroh_ssh = IrohSsh {
-            public_key: *endpoint.node_id().as_bytes(),
+            public_key: *endpoint.id().as_bytes(),
             secret_key: self.secret_key,
             inner: None,
             ssh_port: self.accept_port.unwrap_or(22),
@@ -183,9 +179,9 @@ impl IrohSsh {
         Ok(ssh_process)
     }
 
-    pub async fn connect(&self, node_id: NodeId) -> anyhow::Result<()> {
+    pub async fn connect(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
         let inner = self.inner.as_ref().expect("inner not set");
-        let conn = inner.endpoint.connect(node_id, &IrohSsh::ALPN()).await?;
+        let conn = inner.endpoint.connect(endpoint_id, &IrohSsh::ALPN()).await?;
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
@@ -202,22 +198,22 @@ impl IrohSsh {
         Ok(())
     }
 
-    pub fn node_id(&self) -> NodeId {
+    pub fn node_id(&self) -> EndpointId {
         self.inner
             .as_ref()
             .expect("inner not set")
             .endpoint
-            .node_id()
+            .id()
     }
 }
 
 impl ProtocolHandler for IrohSsh {
     async fn accept(&self, connection: Connection) -> Result<(), iroh::protocol::AcceptError> {
-        let node_id = connection.remote_node_id()?;
+        let endpoint_id = connection.remote_id()?;
 
         match connection.accept_bi().await {
             Ok((mut iroh_send, mut iroh_recv)) => {
-                println!("Accepted bidirectional stream from {node_id}");
+                println!("Accepted bidirectional stream from {endpoint_id}");
 
                 match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
                     Ok(mut ssh_stream) => {
@@ -333,9 +329,8 @@ pub fn dot_ssh(
                 tracing::debug!("dot_ssh: Writing to pub_key: {}", pub_key.display());
                 tracing::debug!("dot_ssh: Writing to priv_key: {}", priv_key.display());
 
-                let key = default_secret_key.clone();
-                let secret_key = key.secret();
-                let public_key = key.public();
+                let secret_key = default_secret_key.clone();
+                let public_key = secret_key.public();
 
                 match std::fs::write(&pub_key, z32::encode(public_key.as_bytes())) {
                     Ok(_) => {
@@ -351,7 +346,7 @@ pub fn dot_ssh(
                     }
                 }
 
-                match std::fs::write(&priv_key, z32::encode(secret_key.as_bytes())) {
+                match std::fs::write(&priv_key, z32::encode(&secret_key.to_bytes())) {
                     Ok(_) => {
                         tracing::info!("dot_ssh: Successfully wrote priv_key");
                     }
@@ -365,7 +360,7 @@ pub fn dot_ssh(
                     }
                 }
 
-                Ok(key)
+                Ok(secret_key)
             }
         }
         (true, false) => {

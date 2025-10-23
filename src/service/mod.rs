@@ -1,6 +1,3 @@
-#[cfg(not(target_os = "windows"))]
-use anyhow::bail;
-
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
@@ -34,12 +31,12 @@ pub trait Service {
     fn uninstall() -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }
 
-pub async fn install_service(service_params: ServiceParams) -> anyhow::Result<()> {
+pub async fn install_service(_service_params: ServiceParams) -> anyhow::Result<()> {
     match std::env::consts::OS {
         #[cfg(target_os = "linux")]
-        "linux" => LinuxService::install(service_params).await,
+        "linux" => LinuxService::install(_service_params).await,
         #[cfg(target_os = "windows")]
-        "windows" => WindowsService::install(service_params).await,
+        "windows" => WindowsService::install(_service_params).await,
         _ => anyhow::bail!("service mode is only supported on linux and windows"),
     }
 }
