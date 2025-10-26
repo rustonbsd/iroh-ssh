@@ -1,4 +1,4 @@
-use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
+use crate::{Builder, Inner, IrohOpts, IrohSsh, cli::SshOpts};
 use std::{ffi::OsString, process::Stdio};
 
 use anyhow::bail;
@@ -133,12 +133,21 @@ impl IrohSsh {
         target: String,
         ssh_opts: SshOpts,
         remote_cmd: Vec<OsString>,
+        iroh_args: IrohOpts,
     ) -> anyhow::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let cmd = &mut Command::new("ssh");
 
-        cmd.arg("-o")
-            .arg(format!("ProxyCommand={} proxy %h", c_exe.display()));
+        cmd.arg("-o").arg(format!(
+            "ProxyCommand={} proxy {} %h",
+            c_exe.display(),
+            iroh_args
+                .relay_url
+                .iter()
+                .map(|url| format!("--relay-url {url}",))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());

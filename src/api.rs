@@ -128,7 +128,7 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::builder()
         .accept_incoming(false)
-        .relays(connect_args.iroh.relay_url)
+        .relays(connect_args.iroh.relay_url.clone())
         .build()
         .await?;
     let mut ssh_process = iroh_ssh
@@ -136,6 +136,7 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
             connect_args.target,
             connect_args.ssh,
             connect_args.remote_cmd,
+            connect_args.iroh,
         )
         .await?;
 
