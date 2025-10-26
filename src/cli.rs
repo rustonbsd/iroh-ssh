@@ -177,6 +177,7 @@ pub struct ServiceArgs {
 }
 
 fn parse_relay_url(relay_url: &str) -> Result<RelayUrl, String> {
-    relay_url.parse::<RelayUrl>()
+    relay_url
+        .parse::<RelayUrl>()
         .map_err(|e| format!("Invalid relay URL: {e}"))
 }

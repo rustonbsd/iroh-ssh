@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Server(args)) => api::server_mode(args, false).await,
         Some(Cmd::Service { op }) => {
             if !self_runas::is_elevated() {
-                return self_runas::admin()
+                return self_runas::admin();
             } else {
                 match op {
                     ServiceCmd::Install { ssh_port } => api::service::install(ssh_port).await,

@@ -25,3 +25,7 @@ target/
 
 /target
 .DS_Store
+
+
+/tests/relay_urls/certs
+/tests/relay_urls/rcgen

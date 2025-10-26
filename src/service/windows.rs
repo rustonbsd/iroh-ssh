@@ -582,6 +582,7 @@ mod service_runtime {
                 ServerArgs {
                     ssh_port,
                     persist: true,
+                    iroh: IrohOpts { relay_url: vec![] },
                 },
                 true,
             )
