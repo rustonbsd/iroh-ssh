@@ -496,7 +496,7 @@ impl WindowsService {
 #[cfg(target_os = "windows")]
 mod service_runtime {
     use super::WindowsService;
-    use crate::ServerArgs;
+    use crate::{IrohOpts, ServerArgs};
     use std::{ffi::OsString, io, sync::mpsc, time::Duration};
     use tokio::runtime::Builder;
     use windows_service::{
@@ -582,6 +582,7 @@ mod service_runtime {
                 ServerArgs {
                     ssh_port,
                     persist: true,
+                    iroh: IrohOpts { relay_url: vec![] },
                 },
                 true,
             )

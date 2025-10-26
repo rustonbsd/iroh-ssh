@@ -1,8 +1,9 @@
 use std::{ffi::OsString, path::PathBuf};
 
 use clap::{ArgAction, Args, Parser, Subcommand, command};
+use iroh::RelayUrl;
 
-const TARGET_HELP: &str = "Target in the form user@NODE_ID";
+const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 
 #[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
@@ -16,11 +17,14 @@ pub struct Cli {
     #[command(flatten)]
     pub ssh: SshOpts,
 
+    #[command(flatten)]
+    pub iroh: IrohOpts,
+
     #[arg(trailing_var_arg = true)]
     pub remote_cmd: Option<Vec<OsString>>,
 }
 
-#[derive(Subcommand,Debug)]
+#[derive(Subcommand, Debug)]
 pub enum Cmd {
     Connect(ConnectArgs),
     #[command(hide = true)]
@@ -38,9 +42,21 @@ pub enum Cmd {
 }
 
 #[derive(Args, Clone, Debug)]
+pub struct IrohOpts {
+    #[arg(long, value_name = "URL", 
+        help = "Custom relay URL (repeatable)", 
+        action = ArgAction::Append,
+        value_parser = parse_relay_url)]
+    pub relay_url: Vec<RelayUrl>,
+}
+
+#[derive(Args, Clone, Debug)]
 pub struct ProxyArgs {
-    #[arg(help = "Proxy node ID")]
-    pub node_id: String,
+    #[arg(help = "Proxy Endpoint ID")]
+    pub endpoint_id: String,
+
+    #[command(flatten)]
+    pub iroh: IrohOpts,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -50,6 +66,9 @@ pub struct ConnectArgs {
 
     #[command(flatten)]
     pub ssh: SshOpts,
+
+    #[command(flatten)]
+    pub iroh: IrohOpts,
 
     #[arg(trailing_var_arg = true)]
     pub remote_cmd: Vec<OsString>,
@@ -63,6 +82,9 @@ pub struct ExecArgs {
     #[command(flatten)]
     pub ssh: SshOpts,
 
+    #[command(flatten)]
+    pub iroh: IrohOpts,
+
     #[arg(trailing_var_arg = true, required = true)]
     pub remote_cmd: Vec<OsString>,
 }
@@ -73,16 +95,17 @@ pub struct SshOpts {
         short = 'i',
         long,
         value_name = "PATH",
-        help = "Identity file for publickey auth"
+        help = "Identity file for publickey auth",
+        value_parser = clap::value_parser!(PathBuf),
     )]
     pub identity_file: Option<PathBuf>,
 
     #[arg(short = 'L', value_name = "LPORT:HOST:RPORT",
-        help = "Local forward [bind_addr:]lport:host:rport (host can't be node_id yet)", action = ArgAction::Append)]
+        help = "Local forward [bind_addr:]lport:host:rport (host can't be endpoint_id yet)", action = ArgAction::Append)]
     pub local_forward: Vec<String>,
 
     #[arg(short = 'R', value_name = "RPORT:HOST:LPORT",
-        help = "Remote forward [bind_addr:]rport:host:lport  (host can't be node_id yet)", action = ArgAction::Append)]
+        help = "Remote forward [bind_addr:]rport:host:lport  (host can't be endpoint_id yet)", action = ArgAction::Append)]
     pub remote_forward: Vec<String>,
 
     #[arg(
@@ -133,6 +156,9 @@ pub struct ServerArgs {
 
     #[arg(short, long, default_value_t = false)]
     pub persist: bool,
+
+    #[command(flatten)]
+    pub iroh: IrohOpts,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -148,4 +174,10 @@ pub enum ServiceCmd {
 pub struct ServiceArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
+}
+
+fn parse_relay_url(relay_url: &str) -> Result<RelayUrl, String> {
+    relay_url
+        .parse::<RelayUrl>()
+        .map_err(|e| format!("Invalid relay URL: {e}"))
 }

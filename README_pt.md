@@ -194,8 +194,8 @@ Exiba seu ID de nó e compartilhe-o para permitir a conexão
 > iroh-ssh service uninstall                 # Desinstalar serviço
 
 # Conexão do cliente
-> iroh-ssh user@<NODE_ID>                           # Conectar-se a um servidor remoto
-> iroh-ssh connect user@<NODE_ID>                   # Comando de conexão explícito, funciona com todos os parâmetros e flags ssh padrão
+> iroh-ssh user@<ENDPOINT_ID>                           # Conectar-se a um servidor remoto
+> iroh-ssh connect user@<ENDPOINT_ID>                   # Comando de conexão explícito, funciona com todos os parâmetros e flags ssh padrão
 ```
 
 ## Modelo de segurança

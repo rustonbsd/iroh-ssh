@@ -1,11 +1,13 @@
-use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
+use crate::{Builder, Inner, IrohOpts, IrohSsh, cli::SshOpts};
 use std::{ffi::OsString, process::Stdio};
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh::{
-    endpoint::Connection, protocol::{ProtocolHandler, Router}, Endpoint, EndpointId, SecretKey
+    Endpoint, EndpointId, RelayConfig, RelayMap, RelayUrl, SecretKey,
+    endpoint::Connection,
+    protocol::{ProtocolHandler, Router},
 };
 use tokio::{
     net::TcpStream,
@@ -18,6 +20,7 @@ impl Builder {
             secret_key: SecretKey::generate(&mut rand::rng()).to_bytes(),
             accept_incoming: false,
             accept_port: None,
+            relay_urls: None,
         }
     }
 
@@ -53,22 +56,37 @@ impl Builder {
                     "dot_ssh_integration: Failed to load/create SSH keys: {:#}",
                     e
                 );
-                eprintln!(
-                    "Warning: Failed to load/create persistent SSH keys: {e:#}"
-                );
+                eprintln!("Warning: Failed to load/create persistent SSH keys: {e:#}");
                 eprintln!("Continuing with ephemeral keys...");
             }
         }
         self
     }
 
+    /// Note: if an empty vector is provided, no relay URLs will be used.
+    pub fn relays(mut self, relays: Vec<RelayUrl>) -> Self {
+        if relays.is_empty() {
+            return self;
+        }
+        tracing::info!("custom_relay: Using custom relay URLs: {relays:?}");
+        self.relay_urls = Some(relays);
+        self
+    }
+
     pub async fn build(&mut self) -> anyhow::Result<IrohSsh> {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
-        let endpoint = Endpoint::builder()
-            .secret_key(secret_key)
-            .bind()
-            .await?;
+        let mut builder = Endpoint::builder().secret_key(secret_key);
+
+        if let Some(relay_urls) = &self.relay_urls {
+            tracing::info!("build: Using custom relay URLs: {relay_urls:?}");
+            let relay_map = relay_urls
+                .iter()
+                .map(|url| RelayConfig::from(url.clone()))
+                .collect::<RelayMap>();
+            builder = builder.relay_mode(iroh::RelayMode::Custom(relay_map));
+        }
+        let endpoint = builder.bind().await?;
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.id().as_bytes(),
@@ -115,12 +133,21 @@ impl IrohSsh {
         target: String,
         ssh_opts: SshOpts,
         remote_cmd: Vec<OsString>,
+        iroh_args: IrohOpts,
     ) -> anyhow::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let cmd = &mut Command::new("ssh");
 
-        cmd.arg("-o")
-            .arg(format!("ProxyCommand={} proxy %h", c_exe.display()));
+        cmd.arg("-o").arg(format!(
+            "ProxyCommand={} proxy {} %h",
+            c_exe.display(),
+            iroh_args
+                .relay_url
+                .iter()
+                .map(|url| format!("--relay-url {url}",))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());
@@ -181,7 +208,10 @@ impl IrohSsh {
 
     pub async fn connect(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
         let inner = self.inner.as_ref().expect("inner not set");
-        let conn = inner.endpoint.connect(endpoint_id, &IrohSsh::ALPN()).await?;
+        let conn = inner
+            .endpoint
+            .connect(endpoint_id, &IrohSsh::ALPN())
+            .await?;
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
@@ -198,12 +228,8 @@ impl IrohSsh {
         Ok(())
     }
 
-    pub fn node_id(&self) -> EndpointId {
-        self.inner
-            .as_ref()
-            .expect("inner not set")
-            .endpoint
-            .id()
+    pub fn endpoint_id(&self) -> EndpointId {
+        self.inner.as_ref().expect("inner not set").endpoint.id()
     }
 }
 

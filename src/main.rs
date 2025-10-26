@@ -15,14 +15,14 @@ async fn main() -> anyhow::Result<()> {
                 ssh: args.ssh,
                 remote_cmd: args.remote_cmd,
                 target: args.target,
+                iroh: args.iroh,
             };
             api::client_mode(conn_args).await
         }
         Some(Cmd::Server(args)) => api::server_mode(args, false).await,
         Some(Cmd::Service { op }) => {
             if !self_runas::is_elevated() {
-                self_runas::admin()?;
-                return Ok(())
+                return self_runas::admin();
             } else {
                 match op {
                     ServiceCmd::Install { ssh_port } => api::service::install(ssh_port).await,
@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
                 ssh: cli.ssh,
                 remote_cmd: cli.remote_cmd.unwrap_or_default(),
                 target: cli.target.unwrap_or_default(),
+                iroh: cli.iroh,
             };
             api::client_mode(conn_args).await
         }

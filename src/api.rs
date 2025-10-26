@@ -74,17 +74,19 @@ pub mod service {
 pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Result<()> {
     let mut iroh_ssh_builder = IrohSsh::builder()
         .accept_incoming(true)
-        .accept_port(server_args.ssh_port);
+        .accept_port(server_args.ssh_port)
+        .relays(server_args.iroh.relay_url);
     if server_args.persist {
         iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service);
     }
+
     let iroh_ssh = iroh_ssh_builder.build().await?;
 
     println!("Connect to this this machine:");
     println!(
         "\n  iroh-ssh {}@{}\n",
         whoami::username(),
-        iroh_ssh.node_id()
+        iroh_ssh.endpoint_id()
     );
     if server_args.persist {
         let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
@@ -108,24 +110,33 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 }
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
-    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
-    let endpoint_id = EndpointId::from_str(if proxy_args.node_id.len() == 64 {
-        &proxy_args.node_id
-    } else if proxy_args.node_id.len() > 64 {
-        &proxy_args.node_id[proxy_args.node_id.len() - 64..]
+    let iroh_ssh = IrohSsh::builder()
+        .accept_incoming(false)
+        .relays(proxy_args.iroh.relay_url)
+        .build()
+        .await?;
+    let endpoint_id = EndpointId::from_str(if proxy_args.endpoint_id.len() == 64 {
+        &proxy_args.endpoint_id
+    } else if proxy_args.endpoint_id.len() > 64 {
+        &proxy_args.endpoint_id[proxy_args.endpoint_id.len() - 64..]
     } else {
-        return Err(anyhow::anyhow!("invalid node id length"));
+        return Err(anyhow::anyhow!("invalid endpoint_id length"));
     })?;
     iroh_ssh.connect(endpoint_id).await
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
-    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
+    let iroh_ssh = IrohSsh::builder()
+        .accept_incoming(false)
+        .relays(connect_args.iroh.relay_url.clone())
+        .build()
+        .await?;
     let mut ssh_process = iroh_ssh
         .start_ssh(
             connect_args.target,
             connect_args.ssh,
             connect_args.remote_cmd,
+            connect_args.iroh,
         )
         .await?;
 
