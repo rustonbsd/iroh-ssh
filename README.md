@@ -124,7 +124,7 @@ or use ephemeral keys
 
 ```
 
-Display its Node ID and share it to allow connection
+Display its Endpoint ID and share it to allow connection
 
 ![Starting server/Installing as service](/media/t-rec_server_service.gif)
 <br>
@@ -181,7 +181,7 @@ Display its Node ID and share it to allow connection
 ## Commands
 
 ```bash
-# Get your Node ID and info
+# Get your Endpoint ID and info
 > iroh-ssh info
 
 # Server modes
@@ -194,13 +194,13 @@ Display its Node ID and share it to allow connection
 > iroh-ssh service uninstall                 # Uninstall service
 
 # Client connection
-> iroh-ssh user@<NODE_ID>                    # Connect to remote server
-> iroh-ssh connect user@<NODE_ID>            # Explicit connect command, works with all standard ssh params and flags
+> iroh-ssh user@<ENDPOINT_ID>                    # Connect to remote server
+> iroh-ssh connect user@<ENDPOINT_ID>            # Explicit connect command, works with all standard ssh params and flags
 ```
 
 ## Security Model
 
-- **Node ID access**: Anyone with the Node ID can reach your SSH port
+- **Endpoint ID access**: Anyone with the Endpoint ID can reach your SSH port
 - **SSH authentication**: SSH key file, certificate and password auth are supported
 - **Persistent keys**: Uses dedicated `.ssh/iroh_ssh_ed25519` keypair
 - **QUIC encryption**: Transport layer encryption between endpoints

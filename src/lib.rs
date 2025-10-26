@@ -3,6 +3,7 @@ mod service;
 mod ssh;
 
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
+use iroh::RelayUrl;
 use iroh::{Endpoint, protocol::Router};
 
 pub mod api;
@@ -35,4 +36,5 @@ pub struct Builder {
     secret_key: [u8; SECRET_KEY_LENGTH],
     accept_incoming: bool,
     accept_port: Option<u16>,
+    relay_urls: Option<Vec<RelayUrl>>,
 }
