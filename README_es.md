@@ -37,7 +37,7 @@ Descarga y configura automáticamente el binario para tu sistema operativo desde
 Linux
 ```bash
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
@@ -45,7 +45,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 ```
@@ -53,7 +53,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.6/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.7/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -135,7 +135,7 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 > iroh-ssh info
 
     Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.4
+    iroh-ssh version 0.2.7
     https://github.com/rustonbsd/iroh-ssh
 
     Your server iroh-ssh nodeid:
@@ -155,7 +155,7 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 ┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
 │ iroh-ssh    │───▶│ Receptor     │────▶│ Tunel QUIC      │────▶│ servidor    │
 │ (Su máquina)│    │ Interno TCP  │     │ (Red P2P)       │     │ iroh-ssh    │
-└─────────────┘    │ (Su Este es un mismo documento en su versión en Ingles y Español. Hacer una versión de en portugués (universal, que favorezca portugués de Brasil, pero entendible en portugués de Portugal). Respetar el inglés existente donde están los comandos y código, tal y  como está en la versión en Español.máquina) │     └─────────────────┘     └─────────────┘
+└─────────────┘    │ (Su máquina) │     └─────────────────┘     └─────────────┘
                    └──────────────┘
         │                  ▲                                           │
         ▼                  │                                           ▼
@@ -195,14 +195,14 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 
 # Conexión de cliente
 > iroh-ssh user@<NODE_ID>                           # Conectarse a un servidor remoto
-> iroh-ssh connect user@<NODE_ID>                   # Comando de conexión explicito, funciona con todos los parametros y banderas ssh estándar
+> iroh-ssh connect user@<NODE_ID>                   # Comando de conexión explicito, funciona con todos los parametros y opciones ssh estándar
 ```
 
 ## Modelo de seguridad
 
 - **Acceso por ID de Nodo**: Cualquier persona con el ID de Nodo puede acceder a su puerto SSH
-- **Autenticación SSH**: Se admite la autenticación de contraseña y certificados SSH.
-- **Claves persistentes**: Utiliza un par de claves dedicado en `.ssh/iroh_ssh_ed25519`
+- **Autenticación SSH**: Se admite la autenticación de llave y certificados SSH.
+- **Llaves persistentes**: Utiliza un par de llave dedicado en `.ssh/iroh_ssh_ed25519`
 - **Cifrado QUIC**: Cifrado en la capa de transporte entre puntos finales
 
 ## Avances
