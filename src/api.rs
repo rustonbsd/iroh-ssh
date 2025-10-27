@@ -37,14 +37,14 @@ pub async fn info_mode() -> anyhow::Result<()> {
 
     if let Some(key) = server_key {
         println!();
-        println!("Your server iroh-ssh nodeid:");
+        println!("Your server iroh-ssh endpoint id:");
         println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
         println!();
     }
 
     if let Some(key) = service_key {
         println!();
-        println!("Your service iroh-ssh nodeid:");
+        println!("Your service iroh-ssh endpoint id:");
         println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
         println!();
     }
@@ -84,7 +84,7 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
     println!(
         "\n  iroh-ssh {}@{}\n",
         whoami::username(),
-        iroh_ssh.node_id()
+        iroh_ssh.endpoint_id()
     );
     if server_args.persist {
         let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
@@ -109,12 +109,12 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
     let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
-    let endpoint_id = EndpointId::from_str(if proxy_args.node_id.len() == 64 {
-        &proxy_args.node_id
-    } else if proxy_args.node_id.len() > 64 {
-        &proxy_args.node_id[proxy_args.node_id.len() - 64..]
+    let endpoint_id = EndpointId::from_str(if proxy_args.endpoint_id.len() == 64 {
+        &proxy_args.endpoint_id
+    } else if proxy_args.endpoint_id.len() > 64 {
+        &proxy_args.endpoint_id[proxy_args.endpoint_id.len() - 64..]
     } else {
-        return Err(anyhow::anyhow!("invalid node id length"));
+        return Err(anyhow::anyhow!("invalid endpoint id length"));
     })?;
     iroh_ssh.connect(endpoint_id).await
 }

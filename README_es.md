@@ -134,14 +134,14 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 // nota: funciona solo con llaves persistentes
 > iroh-ssh info
 
-    Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+    Your iroh-ssh endpoint id: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
     iroh-ssh version 0.2.7
     https://github.com/rustonbsd/iroh-ssh
 
-    Your server iroh-ssh nodeid:
+    Your server iroh-ssh endpoint id:
       iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 
-    Your service iroh-ssh nodeid:
+    Your service iroh-ssh endpoint id:
       iroh-ssh my-user@4fjeeiui4jdm96005255c3begj389xk3aeaeef6cfebd88344aa8c85e1dbfc1ad
 ```
 
@@ -194,8 +194,8 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 > iroh-ssh service uninstall                 # Desinstalar servicio
 
 # Conexión de cliente
-> iroh-ssh user@<NODE_ID>                           # Conectarse a un servidor remoto
-> iroh-ssh connect user@<NODE_ID>                   # Comando de conexión explicito, funciona con todos los parametros y opciones ssh estándar
+> iroh-ssh user@<ENDPOINT_ID>                           # Conectarse a un servidor remoto
+> iroh-ssh connect user@<ENDPOINT_ID>                   # Comando de conexión explicito, funciona con todos los parametros y opciones ssh estándar
 ```
 
 ## Modelo de seguridad

@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use clap::{ArgAction, Args, Parser, Subcommand, command};
 
-const TARGET_HELP: &str = "Target in the form user@NODE_ID";
+const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 
 #[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
@@ -39,8 +39,8 @@ pub enum Cmd {
 
 #[derive(Args, Clone, Debug)]
 pub struct ProxyArgs {
-    #[arg(help = "Proxy node ID")]
-    pub node_id: String,
+    #[arg(help = "Proxy Endpoint ID")]
+    pub endpoint_id: String,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -78,11 +78,11 @@ pub struct SshOpts {
     pub identity_file: Option<PathBuf>,
 
     #[arg(short = 'L', value_name = "LPORT:HOST:RPORT",
-        help = "Local forward [bind_addr:]lport:host:rport (host can't be node_id yet)", action = ArgAction::Append)]
+        help = "Local forward [bind_addr:]lport:host:rport (host can't be endpoint_id yet)", action = ArgAction::Append)]
     pub local_forward: Vec<String>,
 
     #[arg(short = 'R', value_name = "RPORT:HOST:LPORT",
-        help = "Remote forward [bind_addr:]rport:host:lport  (host can't be node_id yet)", action = ArgAction::Append)]
+        help = "Remote forward [bind_addr:]rport:host:lport  (host can't be endpoint_id yet)", action = ArgAction::Append)]
     pub remote_forward: Vec<String>,
 
     #[arg(

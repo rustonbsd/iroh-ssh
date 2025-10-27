@@ -124,7 +124,7 @@ or use ephemeral keys
 
 ```
 
-Display its Node ID and share it to allow connection
+Display its Endpoint ID and share it to allow connection
 
 ![Starting server/Installing as service](/media/t-rec_server_service.gif)
 <br>
@@ -134,14 +134,14 @@ Display its Node ID and share it to allow connection
 // note: works only with persistent keys
 > iroh-ssh info
 
-    Your iroh-ssh nodeid: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
+    Your iroh-ssh endpoint id: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
     iroh-ssh version 0.2.7
     https://github.com/rustonbsd/iroh-ssh
 
-    Your server iroh-ssh nodeid:
+    Your server iroh-ssh endpoint id:
       iroh-ssh my-user@38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
 
-    Your service iroh-ssh nodeid:
+    Your service iroh-ssh endpoint id:
       iroh-ssh my-user@4fjeeiui4jdm96005255c3begj389xk3aeaeef6cfebd88344aa8c85e1dbfc1ad
 ```
 
@@ -181,7 +181,7 @@ Display its Node ID and share it to allow connection
 ## Commands
 
 ```bash
-# Get your Node ID and info
+# Get your Endpoint ID and info
 > iroh-ssh info
 
 # Server modes
@@ -194,13 +194,13 @@ Display its Node ID and share it to allow connection
 > iroh-ssh service uninstall                 # Uninstall service
 
 # Client connection
-> iroh-ssh user@<NODE_ID>                    # Connect to remote server
-> iroh-ssh connect user@<NODE_ID>            # Explicit connect command, works with all standard ssh params and flags
+> iroh-ssh user@<ENDPOINT_ID>                    # Connect to remote server
+> iroh-ssh connect user@<ENDPOINT_ID>            # Explicit connect command, works with all standard ssh params and flags
 ```
 
 ## Security Model
 
-- **Node ID access**: Anyone with the Node ID can reach your SSH port
+- **Endpoint ID access**: Anyone with the Endpoint ID can reach your SSH port
 - **SSH authentication**: SSH key file, certificate and password auth are supported
 - **Persistent keys**: Uses dedicated `.ssh/iroh_ssh_ed25519` keypair
 - **QUIC encryption**: Transport layer encryption between endpoints
