@@ -198,7 +198,7 @@ impl IrohSsh {
         Ok(())
     }
 
-    pub fn node_id(&self) -> EndpointId {
+    pub fn endpoint_id(&self) -> EndpointId {
         self.inner
             .as_ref()
             .expect("inner not set")
