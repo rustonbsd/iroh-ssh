@@ -86,6 +86,7 @@ jobs:
   test:
     name: Test ${{ matrix.platform.name }}
     needs: build
+    if: ${{ success() }}
     runs-on: ${{ matrix.platform.runs-on }}
     strategy:
       fail-fast: false
