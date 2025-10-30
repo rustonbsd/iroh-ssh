@@ -185,8 +185,16 @@ jobs:
           
           echo "Attempting to connect..."
           set +e
-          timeout 10s "$BIN_PATH" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes" "$CONNECTION_STRING" echo "test" 2>&1 | tee connect_output.txt
-          EXIT_CODE=$?
+          if command -v timeout > /dev/null; then
+            timeout 10s "$BIN_PATH" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes" "$CONNECTION_STRING" echo "test" 2>&1 | tee connect_output.txt
+            EXIT_CODE=$?
+          else
+            (sleep 10; kill $$ 2>/dev/null) &
+            TIMEOUT_PID=$!
+            "$BIN_PATH" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes" "$CONNECTION_STRING" echo "test" 2>&1 | tee connect_output.txt
+            EXIT_CODE=$?
+            kill $TIMEOUT_PID 2>/dev/null || true
+          fi
           set -e
           
           if grep -qiE "(permission denied|password|publickey|authentication failed|Connection closed)" connect_output.txt; then
