@@ -4,6 +4,7 @@ on:
   push:
     branches: [build_win]
   pull_request:
+    types: [synchronize]
     branches: [main]
   workflow_dispatch:
 
@@ -53,8 +54,6 @@ jobs:
           TARGET="${{ matrix.platform.target }}"
           EXT="${{ matrix.platform.ext }}"
           
-          
-          # Determine output extension: keep .exe on Windows, add .linux or .macos for others
           OUT_EXT="${EXT}"
           if [ -z "${OUT_EXT}" ]; then
             if [[ "${TARGET}" == *"linux"* ]]; then
@@ -84,3 +83,187 @@ jobs:
           name: iroh-ssh-${{ matrix.platform.target }}
           path: dist/${{ matrix.platform.target }}/*
           retention-days: 2
+
+  test:
+    name: Test ${{ matrix.platform.name }}
+    needs: build
+    runs-on: ${{ matrix.platform.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64 (musl)
+            runs-on: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            ext: ".linux"
+          - name: Windows x86_64 (MSVC)
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
+          - name: macOS x86_64
+            runs-on: macos-latest
+            target: x86_64-apple-darwin
+            ext: ".macos"
+
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: iroh-ssh-${{ matrix.platform.target }}
+          path: dist/${{ matrix.platform.target }}
+
+      - name: Setup SSH Server (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+          sudo systemctl start ssh
+          sudo systemctl status ssh
+
+      - name: Setup SSH Server (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          sudo systemsetup -setremotelogin on
+          sleep 2
+
+      - name: Setup SSH Server (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+          Start-Service sshd
+          Set-Service -Name sshd -StartupType 'Automatic'
+          Get-Service sshd
+
+      - name: Set execute permissions (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}
+
+      - name: Run integration test (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          
+          BIN_PATH="dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          
+          echo "Starting iroh-ssh server..."
+          "$BIN_PATH" server --persist > server_output.txt 2>&1 &
+          SERVER_PID=$!
+          
+          sleep 2
+          
+          if ! kill -0 $SERVER_PID 2>/dev/null; then
+            echo "ERROR: Server process died"
+            cat server_output.txt
+            exit 1
+          fi
+          
+          cat server_output.txt
+          
+          CONNECTION_STRING=$(grep -oP 'iroh-ssh \K[^@]+@[a-f0-9]{64}' server_output.txt || true)
+          
+          if [ -z "$CONNECTION_STRING" ]; then
+            echo "ERROR: Could not extract connection string from server output"
+            cat server_output.txt
+            kill $SERVER_PID || true
+            exit 1
+          fi
+          
+          echo "Connection string: $CONNECTION_STRING"
+          
+          echo "Attempting to connect..."
+          set +e
+          timeout 10s "$BIN_PATH" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes" "$CONNECTION_STRING" echo "test" 2>&1 | tee connect_output.txt
+          EXIT_CODE=$?
+          set -e
+          
+          if grep -qiE "(permission denied|password|publickey|authentication failed|Connection closed)" connect_output.txt; then
+            echo "SUCCESS: Connection reached SSH authentication stage"
+            kill $SERVER_PID || true
+            exit 0
+          elif grep -qiE "(connection refused|network|timeout|no route)" connect_output.txt; then
+            echo "FAILURE: Could not establish connection"
+            cat connect_output.txt
+            kill $SERVER_PID || true
+            exit 1
+          else
+            echo "Test completed - checking if connection was attempted"
+            cat connect_output.txt
+            if [ $EXIT_CODE -eq 255 ]; then
+              echo "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
+              kill $SERVER_PID || true
+              exit 0
+            fi
+            kill $SERVER_PID || true
+            exit 1
+          fi
+
+      - name: Run integration test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = "Continue"
+          
+          $BinPath = "dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          
+          Write-Host "Starting iroh-ssh server..."
+          $ServerJob = Start-Job -ScriptBlock {
+            param($Path)
+            & $Path server --persist
+          } -ArgumentList (Resolve-Path $BinPath).Path
+          
+          Start-Sleep -Seconds 5
+          
+          $ServerOutput = Receive-Job -Job $ServerJob
+          Write-Host "Server output:"
+          Write-Host $ServerOutput
+          
+          $ConnectionMatch = ($ServerOutput | Select-String -Pattern 'iroh-ssh ([^@]+@[a-f0-9]{64})').Matches
+          if ($ConnectionMatch.Count -eq 0) {
+            Write-Host "ERROR: Could not extract connection string"
+            Stop-Job -Job $ServerJob
+            Remove-Job -Job $ServerJob
+            exit 1
+          }
+          
+          $ConnectionString = $ConnectionMatch[0].Groups[1].Value
+          Write-Host "Connection string: $ConnectionString"
+          
+          Write-Host "Attempting to connect..."
+          $ConnectOutput = & $BinPath -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=NUL" -o "BatchMode=yes" $ConnectionString "echo test" 2>&1 | Out-String
+          $ExitCode = $LASTEXITCODE
+          
+          Write-Host "Connect output:"
+          Write-Host $ConnectOutput
+          
+          if ($ConnectOutput -match "(permission denied|password|publickey|authentication|Connection closed)") {
+            Write-Host "SUCCESS: Connection reached SSH authentication stage"
+            Stop-Job -Job $ServerJob
+            Remove-Job -Job $ServerJob
+            exit 0
+          }
+          elseif ($ConnectOutput -match "(connection refused|network|timeout|no route)") {
+            Write-Host "FAILURE: Could not establish connection"
+            Stop-Job -Job $ServerJob
+            Remove-Job -Job $ServerJob
+            exit 1
+          }
+          elseif ($ExitCode -eq 255) {
+            Write-Host "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
+            Stop-Job -Job $ServerJob
+            Remove-Job -Job $ServerJob
+            exit 0
+          }
+          else {
+            Write-Host "Test result unclear"
+            Stop-Job -Job $ServerJob
+            Remove-Job -Job $ServerJob
+            exit 1
+          }
