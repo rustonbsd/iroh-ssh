@@ -166,7 +166,7 @@ jobs:
           
           cat server_output.txt
           
-          CONNECTION_STRING=$(grep -oP 'iroh-ssh \K[^@]+@[a-f0-9]{64}' server_output.txt || true)
+          CONNECTION_STRING=$(grep -o 'iroh-ssh [^@]*@[a-f0-9]\{64\}' server_output.txt | sed 's/iroh-ssh //' || true)
           
           if [ -z "$CONNECTION_STRING" ]; then
             echo "ERROR: Could not extract connection string from server output"
