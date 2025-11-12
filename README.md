@@ -147,31 +147,32 @@ Display its Endpoint ID and share it to allow connection
 
 ---
 
-
-
 ## How It Works
 
 ```
-┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
-│ iroh-ssh    │───▶│ internal TCP │────▶│ QUIC Tunnel     │────▶│ iroh-ssh    │
-│ (your machine)   │    Listener  │     │ (P2P Network)   │     │ server      │
-└─────────────┘    | (your machine)     └─────────────────┘     └─────────────┘
-                   └──────────────┘
-        │                  ▲                                           │
-        ▼                  │                                           ▼
-                   ┌──────────────┐                            ┌─────────────┐
-        ⦜   -- ▶   │ run:     ssh │                            │ SSH Server  │
-                   │ user@localhost                            │ (port 22)   │
-                   └──────────────┘                            └─────────────┘
+┌─────────────┐          ┌─────────────────┐          ┌─────────────┐
+│     SSH     │─────────▶│  QUIC Tunnel    │─────────▶│  iroh-ssh   │
+│   Client    │          │  (P2P Network)  │          │   server    │
+└─────────────┘          └─────────────────┘          └─────────────┘
+      │                           ▲                            │
+      │                           │                            │
+      ▼                           │                            ▼
+┌─────────────┐          ┌─────────────┐          ┌──────────────────┐
+│ ProxyCommand│          │  iroh-ssh   │          │   SSH Server     │
+│ iroh-ssh    │──────────│    proxy    │          │ localhost:22     │
+│ proxy %h    │          │             │          └──────────────────┘
+└─────────────┘          └─────────────┘
 ```
 
-1. **Client**: Creates local TCP listener, connects system SSH client to it
-2. **Tunnel**: QUIC connection through Iroh's P2P network (automatic NAT traversal)
-3. **Server**: Proxies connections to local SSH daemon running on (e.g. port localhost:22) (requires ssh server)
-4. **Authentication**: Standard SSH security applies end-to-end. The tunnel is ontop of that an encrypted QUIC connection.
+1. **SSH Client**: Invokes `iroh-ssh proxy` via SSH's ProxyCommand
+2. **Proxy**: Establishes QUIC connection through Iroh's P2P network (automatic NAT traversal)
+3. **Server**: Accepts connection and proxies to local SSH daemon (port 22)
+4. **Authentication**: Standard SSH security end-to-end over encrypted QUIC tunnel
 
 ## Use Cases
 
+- **VNC/RDP over SSH**: Securely access graphical desktops remotely
+- **VisualStudio SSH Extension**: Develop on remote machines seamlessly
 - **Remote servers**: Access cloud instances without exposing SSH ports
 - **Home networks**: Connect to devices behind router/firewall
 - **Corporate networks**: Bypass restrictive network policies
