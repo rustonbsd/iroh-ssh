@@ -147,31 +147,32 @@ Mostrar su ID de nodo y compártalo para permitir la conexión
 
 ---
 
-
-
 ## Como funciona
 
 ```
-┌─────────────┐    ┌──────────────┐     ┌─────────────────┐     ┌─────────────┐
-│ iroh-ssh    │───▶│ Receptor     │────▶│ Tunel QUIC      │────▶│ servidor    │
-│ (Su máquina)│    │ Interno TCP  │     │ (Red P2P)       │     │ iroh-ssh    │
-└─────────────┘    │ (Su máquina) │     └─────────────────┘     └─────────────┘
-                   └──────────────┘
-        │                  ▲                                           │
-        ▼                  │                                           ▼
-                   ┌──────────────┐                            ┌─────────────┐
-        ⦜   -- ▶   │ corre:   ssh │                            │ Servidor SSH│
-                   │ user@localhost                            │ (puerto 22) │
-                   └──────────────┘                            └─────────────┘
+┌─────────────┐          ┌─────────────────┐          ┌─────────────┐
+│     SSH     │─────────▶│  Tunel QUIC     │─────────▶│  iroh-ssh   │
+│   Cliente   │          │  (Red P2P)      │          │  servidor   │
+└─────────────┘          └─────────────────┘          └─────────────┘
+      │                           ▲                            │
+      │                           │                            │
+      ▼                           │                            ▼
+┌─────────────┐          ┌─────────────┐          ┌──────────────────┐
+│ ProxyCommand│          │  iroh-ssh   │          │ Servidor SSH     │
+│ iroh-ssh    │──────────│    proxy    │          │ localhost:22     │
+│ proxy %h    │          │             │          └──────────────────┘
+└─────────────┘          └─────────────┘
 ```
 
-1. **Cliente**: Crea un receptor local TCP, conecta el cliente SSH del sistema a él
-2. **Tunel**: Conexion QUIC a través de la red P2P de Iroh (traspaso NAT automatico)
-3. **Servidor**: Proxifica la conexion al daemon SSH que esta corriendo localmente. (por ejemplo el puerto localhots:22)
-4. **Autenticación**: Seguridad estándar SSH se aplica end-to-end. El túnel está sobre eso una conexión QUIC cifrada.
+1. **Cliente SSH**: Invoca `iroh-ssh proxy` a través del ProxyCommand de SSH
+2. **Proxy**: Establece una conexión QUIC a través de la red P2P de Iroh (traspaso NAT automatico)
+3. **Servidor**: Acepta la conexión y proxifica al daemon SSH local (puerto 22)
+4. **Autenticación**: Seguridad estándar SSH end-to-end sobre túnel QUIC cifrado
 
 ## Escenarios de uso
 
+- **VNC/RDP sobre SSH**: Acceder de forma segura a escritorios gráficos de forma remota
+- **Extensión SSH de VisualStudio**: Desarrollar en máquinas remotas sin problemas
 - **Servidores remotos**: Acceder a instancias en la nube sin exponer puertos SSH
 - **Redes domesticas**: Conectar a dispositivos tras un router/firewall
 - **Redes corporativas**: Saltarse politicas de redes restrictivas
