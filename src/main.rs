@@ -31,6 +31,10 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Cmd::Info) => api::info_mode().await,
+        Some(Cmd::Version) => {
+            println!("iroh-ssh version {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        },
         Some(Cmd::Proxy(args)) => api::proxy_mode(args).await,
         #[cfg(target_os = "windows")]
         Some(Cmd::RunService(args)) => iroh_ssh::run_service(args.ssh_port).await,

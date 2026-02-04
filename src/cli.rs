@@ -35,6 +35,7 @@ pub enum Cmd {
     Proxy(ProxyArgs),
     #[command(hide = true)]
     RunService(ServiceArgs),
+    Version,
 }
 
 #[derive(Args, Clone, Debug)]
