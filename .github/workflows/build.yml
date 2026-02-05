@@ -2,10 +2,12 @@ name: Build cross-platform artifacts
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    types: [synchronize]
-  workflow_dispatch:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 jobs:
   build:
