@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{ArgAction, Args, Parser, Subcommand, command};
+use clap::{ArgAction, Args, Parser, Subcommand};
 
 const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 
