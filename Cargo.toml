@@ -11,32 +11,32 @@ version = "0.2.8"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 iroh = "0.94"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 rand = "0.9"
-tokio-stream = { version = "0.1.15", features = ["sync"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3.20", features = ["fmt", "ansi"] }
-tracing-appender = "0.2"
-tokio = { version = "1.48", features = [
+tokio-stream = { version = "0.1.18", features = ["sync"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "ansi"] }
+tracing-appender = "0.2.4"
+tokio = { version = "1.49.0", features = [
     "macros",
     "io-util",
     "sync",
     "rt",
 ] }
-clap = { version = "4.5.48", features = ["derive"] }
+clap = { version = "4.5.57", features = ["derive"] }
 homedir = "0.3.6"
-whoami = "1.6.1"
+whoami = "2.1.0"
 z32 = "1.3"
 runas = "1.2.0"
-tempfile = "3.23.0"
+tempfile = "3.24.0"
 self-runas = "0.1"
 
 [target.'cfg(windows)'.dependencies.windows-service]
 version = "0.8.0"
 [target.'cfg(windows)'.dependencies.windows-sys]
-version = "0.61"
+version = "0.61.2"
 features = [
     "Win32_Foundation",
     "Win32_Security",
