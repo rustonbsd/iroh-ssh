@@ -15,13 +15,13 @@ rustPlatform.buildRustPackage (finalAttrs: {
   version = "0.2.8";
 
   src = fetchFromGitHub {
-    owner = "LukeDSchenk";
+    owner = "rustonbsd";
     repo = "iroh-ssh";
     tag = finalAttrs.version;
-    hash = "sha256-hFPM+U88bb9lST1iE9shbjqOzEzC3qhLQAsOxxqv9Pg=";
+    hash = "sha256-hFPM+U88bb9lST1iE9shbjqOzuzC3qhLQAsOxxqv9Pg="; # Need to change
   };
 
-  cargoHash = "sha256-zsMz7bu6uGWXk1opE9yjPPeRcbspJgCe2RF4U50610w=";
+  cargoHash = "sha256-zsMz7bu6uGWXk1opE9yjPPeucbspJgCe2RF4U50610w="; # Need to change
 
   nativeBuildInputs = [
     autoAddDriverRunpath
@@ -42,7 +42,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "ssh without ip";
-    homepage = "https://github.com/LukeDSchenk/iroh-ssh";
+    homepage = "https://github.com/rustonbsd/iroh-ssh";
     license = lib.licenses.mit;
     mainProgram = "iroh-ssh";
   };
