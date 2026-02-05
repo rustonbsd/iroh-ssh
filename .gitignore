@@ -24,4 +24,6 @@ target/
 # Added by cargo
 
 /target
+nix/result
 .DS_Store
+
