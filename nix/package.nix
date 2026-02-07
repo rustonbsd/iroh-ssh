@@ -18,10 +18,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
     owner = "rustonbsd";
     repo = "iroh-ssh";
     tag = finalAttrs.version;
-    hash = "sha256-hFPM+U88bb9lST1iE9shbjqOzEzC3qhLQAsOxxqv9Pg=";
+    hash = "sha256-jKJ0dathwsFif2N/X4CnMAG74h0h/5hnuWWwbJrbU18=";
   };
 
-  cargoHash = "sha256-zsMz7bu6uGWXk1opE9yjPPeRcbspJgCe2RF4U50610w=";
+  cargoHash = "sha256-KZu4HA5E9R4sdBW5cdhyA5E2bo2YN2TPSKDlJuzDGnU=";
 
   nativeBuildInputs = [
     autoAddDriverRunpath
