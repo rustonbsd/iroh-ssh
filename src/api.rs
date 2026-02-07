@@ -38,14 +38,22 @@ pub async fn info_mode() -> anyhow::Result<()> {
     if let Some(key) = server_key {
         println!();
         println!("Your server iroh-ssh endpoint id:");
-        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
+        println!(
+            "  iroh-ssh {}@{}",
+            whoami::username().unwrap_or("UNKNOWN_USER".to_string()),
+            key.clone().public()
+        );
         println!();
     }
 
     if let Some(key) = service_key {
         println!();
         println!("Your service iroh-ssh endpoint id:");
-        println!("  iroh-ssh {}@{}", whoami::username(), key.clone().public());
+        println!(
+            "  iroh-ssh {}@{}",
+            whoami::username().unwrap_or("UNKNOWN_USER".to_string()),
+            key.clone().public()
+        );
         println!();
     }
 
@@ -83,7 +91,7 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
     println!("Connect to this this machine:");
     println!(
         "\n  iroh-ssh {}@{}\n",
-        whoami::username(),
+        whoami::username().unwrap_or("UNKNOWN_USER".to_string()),
         iroh_ssh.endpoint_id()
     );
     if server_args.persist {

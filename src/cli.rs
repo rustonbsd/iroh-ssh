@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{ArgAction, Args, Parser, Subcommand, command};
+use clap::{ArgAction, Args, Parser, Subcommand};
 
 const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 
@@ -35,6 +35,7 @@ pub enum Cmd {
     Proxy(ProxyArgs),
     #[command(hide = true)]
     RunService(ServiceArgs),
+    Version,
 }
 
 #[derive(Args, Clone, Debug)]
