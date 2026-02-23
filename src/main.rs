@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(())
             } else {
                 match op {
-                    ServiceCmd::Install { ssh_port } => api::service::install(ssh_port).await,
+                    ServiceCmd::Install { ssh_port, relay_url, extra_relay_url } => api::service::install(ssh_port, relay_url, extra_relay_url).await,
                     ServiceCmd::Uninstall => api::service::uninstall().await,
                 }
             }
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         },
         Some(Cmd::Proxy(args)) => api::proxy_mode(args).await,
         #[cfg(target_os = "windows")]
-        Some(Cmd::RunService(args)) => iroh_ssh::run_service(args.ssh_port).await,
+        Some(Cmd::RunService(args)) => iroh_ssh::run_service(args.ssh_port, args.relay_url, args.extra_relay_url).await,
         #[cfg(not(target_os = "windows"))]
         Some(Cmd::RunService(_)) => {
             bail!("service runtime is only available on windows");

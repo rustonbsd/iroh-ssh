@@ -173,6 +173,12 @@ pub enum ServiceCmd {
     Install {
         #[arg(long, default_value = "22")]
         ssh_port: u16,
+
+        #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+        relay_url: Vec<String>,
+
+        #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+        extra_relay_url: Vec<String>,
     },
     Uninstall,
 }
@@ -181,4 +187,10 @@ pub enum ServiceCmd {
 pub struct ServiceArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 }

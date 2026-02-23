@@ -69,8 +69,19 @@ pub async fn info_mode() -> anyhow::Result<()> {
 pub mod service {
     use crate::{ServiceParams, install_service, uninstall_service};
 
-    pub async fn install(ssh_port: u16) -> anyhow::Result<()> {
-        if install_service(ServiceParams { ssh_port }).await.is_err() {
+    pub async fn install(
+        ssh_port: u16,
+        relay_url: Vec<String>,
+        extra_relay_url: Vec<String>,
+    ) -> anyhow::Result<()> {
+        if install_service(ServiceParams {
+            ssh_port,
+            relay_url,
+            extra_relay_url,
+        })
+        .await
+        .is_err()
+        {
             anyhow::bail!("service install is only supported on linux and windows");
         }
         Ok(())
