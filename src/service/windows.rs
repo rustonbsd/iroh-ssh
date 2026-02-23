@@ -582,6 +582,8 @@ mod service_runtime {
                 ServerArgs {
                     ssh_port,
                     persist: true,
+                    relay_url: Vec::new(),
+                    extra_relay_url: Vec::new(),
                 },
                 true,
             )

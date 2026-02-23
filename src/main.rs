@@ -15,6 +15,8 @@ async fn main() -> anyhow::Result<()> {
                 ssh: args.ssh,
                 remote_cmd: args.remote_cmd,
                 target: args.target,
+                relay_url: args.relay_url,
+                extra_relay_url: args.extra_relay_url,
             };
             api::client_mode(conn_args).await
         }
@@ -47,6 +49,8 @@ async fn main() -> anyhow::Result<()> {
                 ssh: cli.ssh,
                 remote_cmd: cli.remote_cmd.unwrap_or_default(),
                 target: cli.target.unwrap_or_default(),
+                relay_url: cli.relay_url,
+                extra_relay_url: cli.extra_relay_url,
             };
             api::client_mode(conn_args).await
         }
