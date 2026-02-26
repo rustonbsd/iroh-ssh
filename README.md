@@ -217,6 +217,10 @@ Display its Endpoint ID and share it to allow connection
 - [x] (almost) all ssh commands supported
 - [ ] MacOS service mode
 
+## Custom Relay Setup
+
+see: [CUSTOM_RELAY.md](CUSTOM_RELAY.md)
+
 ## License
 
 Licensed under either of Apache License 2.0 or MIT license at your option.
