@@ -2,13 +2,19 @@ use std::str::FromStr as _;
 
 use anyhow::bail;
 use homedir::my_home;
-use iroh::{EndpointId, SecretKey};
+use iroh::{EndpointId, RelayUrl, SecretKey};
 
 use crate::{
     IrohSsh,
     cli::{ConnectArgs, ProxyArgs, ServerArgs},
     dot_ssh,
 };
+
+fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
+    urls.iter()
+        .map(|s| RelayUrl::from_str(s).map_err(|e| anyhow::anyhow!("invalid relay URL '{s}': {e}")))
+        .collect()
+}
 
 pub async fn info_mode() -> anyhow::Result<()> {
     let server_key = dot_ssh(&SecretKey::generate(&mut rand::rng()), false, false).ok();
@@ -63,8 +69,19 @@ pub async fn info_mode() -> anyhow::Result<()> {
 pub mod service {
     use crate::{ServiceParams, install_service, uninstall_service};
 
-    pub async fn install(ssh_port: u16) -> anyhow::Result<()> {
-        if install_service(ServiceParams { ssh_port }).await.is_err() {
+    pub async fn install(
+        ssh_port: u16,
+        relay_url: Vec<String>,
+        extra_relay_url: Vec<String>,
+    ) -> anyhow::Result<()> {
+        if install_service(ServiceParams {
+            ssh_port,
+            relay_url,
+            extra_relay_url,
+        })
+        .await
+        .is_err()
+        {
             anyhow::bail!("service install is only supported on linux and windows");
         }
         Ok(())
@@ -82,7 +99,9 @@ pub mod service {
 pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Result<()> {
     let mut iroh_ssh_builder = IrohSsh::builder()
         .accept_incoming(true)
-        .accept_port(server_args.ssh_port);
+        .accept_port(server_args.ssh_port)
+        .relay_urls(parse_relay_urls(&server_args.relay_url)?)
+        .extra_relay_urls(parse_relay_urls(&server_args.extra_relay_url)?);
     if server_args.persist {
         iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service);
     }
@@ -116,7 +135,12 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 }
 
 pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
-    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
+    let iroh_ssh = IrohSsh::builder()
+        .accept_incoming(false)
+        .relay_urls(parse_relay_urls(&proxy_args.relay_url)?)
+        .extra_relay_urls(parse_relay_urls(&proxy_args.extra_relay_url)?)
+        .build()
+        .await?;
     let endpoint_id = EndpointId::from_str(if proxy_args.endpoint_id.len() == 64 {
         &proxy_args.endpoint_id
     } else if proxy_args.endpoint_id.len() > 64 {
@@ -128,12 +152,19 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
-    let iroh_ssh = IrohSsh::builder().accept_incoming(false).build().await?;
+    let iroh_ssh = IrohSsh::builder()
+        .accept_incoming(false)
+        .relay_urls(parse_relay_urls(&connect_args.relay_url)?)
+        .extra_relay_urls(parse_relay_urls(&connect_args.extra_relay_url)?)
+        .build()
+        .await?;
     let mut ssh_process = iroh_ssh
         .start_ssh(
             connect_args.target,
             connect_args.ssh,
             connect_args.remote_cmd,
+            &connect_args.relay_url,
+            &connect_args.extra_relay_url,
         )
         .await?;
 

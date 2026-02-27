@@ -3,6 +3,8 @@ use std::{ffi::OsString, path::PathBuf};
 use clap::{ArgAction, Args, Parser, Subcommand};
 
 const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
+const RELAY_URL_HELP: &str = "Use only these relay servers, replacing the defaults (repeatable)";
+const EXTRA_RELAY_URL_HELP: &str = "Add relay servers alongside the defaults (repeatable)";
 
 #[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
@@ -12,6 +14,12 @@ pub struct Cli {
 
     #[arg(help = TARGET_HELP)]
     pub target: Option<String>,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
@@ -42,12 +50,24 @@ pub enum Cmd {
 pub struct ProxyArgs {
     #[arg(help = "Proxy Endpoint ID")]
     pub endpoint_id: String,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 }
 
 #[derive(Args, Clone, Debug)]
 pub struct ConnectArgs {
     #[arg(help = TARGET_HELP)]
     pub target: String,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
@@ -60,6 +80,12 @@ pub struct ConnectArgs {
 pub struct ExecArgs {
     #[arg(help = TARGET_HELP)]
     pub target: String,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
@@ -134,6 +160,12 @@ pub struct ServerArgs {
 
     #[arg(short, long, default_value_t = false)]
     pub persist: bool,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -141,6 +173,12 @@ pub enum ServiceCmd {
     Install {
         #[arg(long, default_value = "22")]
         ssh_port: u16,
+
+        #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+        relay_url: Vec<String>,
+
+        #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+        extra_relay_url: Vec<String>,
     },
     Uninstall,
 }
@@ -149,4 +187,10 @@ pub enum ServiceCmd {
 pub struct ServiceArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
+
+    #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
+    pub relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
+    pub extra_relay_url: Vec<String>,
 }

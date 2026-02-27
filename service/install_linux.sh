@@ -4,7 +4,7 @@ Description=SSH over Iroh
 [Service]
 Type=simple
 WorkingDirectory=~
-ExecStart=/bin/bash -c 'iroh-ssh server -p --ssh-port [SSHPORT]'
+ExecStart=/bin/bash -c 'iroh-ssh server -p --ssh-port [SSHPORT][RELAYARGS]'
 Restart=on-failure
 RestartSec=3s
 

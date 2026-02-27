@@ -4,8 +4,11 @@ use std::{ffi::OsString, process::Stdio};
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
+use std::sync::Arc;
+
 use iroh::{
-    endpoint::Connection, protocol::{ProtocolHandler, Router}, Endpoint, EndpointId, SecretKey
+    RelayConfig,
+    endpoint::{Connection, RelayMode}, protocol::{ProtocolHandler, Router}, Endpoint, EndpointId, RelayUrl, SecretKey
 };
 use tokio::{
     net::TcpStream,
@@ -18,6 +21,8 @@ impl Builder {
             secret_key: SecretKey::generate(&mut rand::rng()).to_bytes(),
             accept_incoming: false,
             accept_port: None,
+            relay_urls: Vec::new(),
+            extra_relay_urls: Vec::new(),
         }
     }
 
@@ -33,6 +38,16 @@ impl Builder {
 
     pub fn secret_key(mut self, secret_key: &[u8; SECRET_KEY_LENGTH]) -> Self {
         self.secret_key = *secret_key;
+        self
+    }
+
+    pub fn relay_urls(mut self, urls: Vec<RelayUrl>) -> Self {
+        self.relay_urls = urls;
+        self
+    }
+
+    pub fn extra_relay_urls(mut self, urls: Vec<RelayUrl>) -> Self {
+        self.extra_relay_urls = urls;
         self
     }
 
@@ -65,10 +80,20 @@ impl Builder {
     pub async fn build(&mut self) -> anyhow::Result<IrohSsh> {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
-        let endpoint = Endpoint::builder()
-            .secret_key(secret_key)
-            .bind()
-            .await?;
+        let mut builder = Endpoint::builder().secret_key(secret_key);
+
+        if !self.relay_urls.is_empty() {
+            let relay_map = self.relay_urls.iter().cloned().collect();
+            builder = builder.relay_mode(RelayMode::Custom(relay_map));
+        } else if !self.extra_relay_urls.is_empty() {
+            let relay_map = RelayMode::Default.relay_map();
+            for url in &self.extra_relay_urls {
+                relay_map.insert(url.clone(), Arc::new(RelayConfig::from(url.clone())));
+            }
+            builder = builder.relay_mode(RelayMode::Custom(relay_map));
+        }
+
+        let endpoint = builder.bind().await?;
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.id().as_bytes(),
@@ -115,12 +140,22 @@ impl IrohSsh {
         target: String,
         ssh_opts: SshOpts,
         remote_cmd: Vec<OsString>,
+        relay_urls: &[String],
+        extra_relay_urls: &[String],
     ) -> anyhow::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let cmd = &mut Command::new("ssh");
 
+        let mut proxy_cmd = format!("{} proxy", c_exe.display());
+        for url in relay_urls {
+            proxy_cmd.push_str(&format!(" --relay-url {url}"));
+        }
+        for url in extra_relay_urls {
+            proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
+        }
+        proxy_cmd.push_str(" %h");
         cmd.arg("-o")
-            .arg(format!("ProxyCommand={} proxy %h", c_exe.display()));
+            .arg(format!("ProxyCommand={proxy_cmd}"));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());

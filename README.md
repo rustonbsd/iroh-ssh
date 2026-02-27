@@ -37,7 +37,7 @@ Download and setup the binary automatically for your operating system from [GitH
 Linux
 ```bash
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.8/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.9/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
@@ -45,7 +45,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.8/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.9/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 ```
@@ -53,7 +53,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.8/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.9/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -135,7 +135,7 @@ Display its Endpoint ID and share it to allow connection
 > iroh-ssh info
 
     Your iroh-ssh endpoint id: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.8
+    iroh-ssh version 0.2.9
     https://github.com/rustonbsd/iroh-ssh
 
     Your server iroh-ssh endpoint id:
@@ -216,6 +216,10 @@ Display its Endpoint ID and share it to allow connection
 - [x] Windows service mode
 - [x] (almost) all ssh commands supported
 - [ ] MacOS service mode
+
+## Custom Relay Setup
+
+see: [CUSTOM_RELAY.md](CUSTOM_RELAY.md)
 
 ## License
 
