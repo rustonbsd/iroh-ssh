@@ -4,6 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/iroh-ssh.svg)](https://crates.io/crates/iroh-ssh)
 [![Documentation](https://docs.rs/iroh-ssh/badge.svg)](https://docs.rs/iroh-ssh)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![AUR](https://img.shields.io/aur/version/iroh-ssh-git)](https://aur.archlinux.org/packages/iroh-ssh-git)
 
 **SSH to any machine without ip, behind a NAT/firewall without port forwarding or VPN setup.**
 
@@ -30,6 +31,11 @@
 
 ```bash
 cargo install iroh-ssh
+```
+
+Arch Linux ([AUR](https://aur.archlinux.org/packages/iroh-ssh-git))
+```bash
+yay -S iroh-ssh-git
 ```
 
 Download and setup the binary automatically for your operating system from [GitHub Releases](https://github.com/rustonbsd/iroh-ssh/releases):
