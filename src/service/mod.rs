@@ -11,11 +11,13 @@ pub(crate) use crate::service::windows::WindowsService;
 #[cfg(target_os = "windows")]
 pub async fn run_service(
     ssh_port: u16,
+    key_dir: Option<std::path::PathBuf>,
     relay_url: Vec<String>,
     extra_relay_url: Vec<String>,
 ) -> anyhow::Result<()> {
     WindowsService::run_service(ServiceParams {
         ssh_port,
+        key_dir,
         relay_url,
         extra_relay_url,
     })
@@ -25,6 +27,7 @@ pub async fn run_service(
 #[cfg(not(target_os = "windows"))]
 pub async fn run_service(
     _ssh_port: u16,
+    _key_dir: Option<std::path::PathBuf>,
     _relay_url: Vec<String>,
     _extra_relay_url: Vec<String>,
 ) -> anyhow::Result<()> {
@@ -34,6 +37,7 @@ pub async fn run_service(
 #[derive(Debug, Clone)]
 pub struct ServiceParams {
     pub ssh_port: u16,
+    pub key_dir: Option<std::path::PathBuf>,
     pub relay_url: Vec<String>,
     pub extra_relay_url: Vec<String>,
 }

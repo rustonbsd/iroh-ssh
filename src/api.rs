@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr as _;
 
 use anyhow::bail;
@@ -16,9 +17,21 @@ fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
         .collect()
 }
 
-pub async fn info_mode() -> anyhow::Result<()> {
-    let server_key = dot_ssh(&SecretKey::generate(&mut rand::rng()), false, false).ok();
-    let service_key = dot_ssh(&SecretKey::generate(&mut rand::rng()), false, true).ok();
+pub async fn info_mode(key_dir: Option<PathBuf>) -> anyhow::Result<()> {
+    let server_key = dot_ssh(
+        &SecretKey::generate(&mut rand::rng()),
+        false,
+        false,
+        key_dir.as_deref(),
+    )
+    .ok();
+    let service_key = dot_ssh(
+        &SecretKey::generate(&mut rand::rng()),
+        false,
+        true,
+        key_dir.as_deref(),
+    )
+    .ok();
 
     if server_key.is_none() && service_key.is_none() {
         println!(
@@ -67,15 +80,19 @@ pub async fn info_mode() -> anyhow::Result<()> {
 }
 
 pub mod service {
+    use std::path::PathBuf;
+
     use crate::{ServiceParams, install_service, uninstall_service};
 
     pub async fn install(
         ssh_port: u16,
+        key_dir: Option<PathBuf>,
         relay_url: Vec<String>,
         extra_relay_url: Vec<String>,
     ) -> anyhow::Result<()> {
         if install_service(ServiceParams {
             ssh_port,
+            key_dir,
             relay_url,
             extra_relay_url,
         })
@@ -100,6 +117,7 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
     let mut iroh_ssh_builder = IrohSsh::builder()
         .accept_incoming(true)
         .accept_port(server_args.ssh_port)
+        .key_dir(server_args.key_dir.clone())
         .relay_urls(parse_relay_urls(&server_args.relay_url)?)
         .extra_relay_urls(parse_relay_urls(&server_args.extra_relay_url)?);
     if server_args.persist {
@@ -114,8 +132,14 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
         iroh_ssh.endpoint_id()
     );
     if server_args.persist {
-        let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
-        let ssh_dir = distro_home.join(".ssh");
+        let ssh_dir = match server_args.key_dir {
+            Some(dir) => dir,
+            None => {
+                let distro_home =
+                    my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+                distro_home.join(".ssh")
+            }
+        };
         println!("  (using persistent keys in {})", ssh_dir.display());
     } else {
         println!(

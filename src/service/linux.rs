@@ -45,6 +45,9 @@ impl LinuxService {
         use std::io::Write as _;
 
         let mut relay_args = String::new();
+        if let Some(ref dir) = service_params.key_dir {
+            relay_args.push_str(&format!(" --key-dir {}", dir.display()));
+        }
         for url in &service_params.relay_url {
             relay_args.push_str(&format!(" --relay-url {url}"));
         }
