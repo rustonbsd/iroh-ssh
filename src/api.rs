@@ -164,7 +164,11 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
         .extra_relay_urls(parse_relay_urls(&proxy_args.extra_relay_url)?)
         .build()
         .await?;
-    let hostname = proxy_args.endpoint_id.split(":").next().ok_or_else(|| anyhow::anyhow!("failed to parse hostname"))?;
+    let hostname = proxy_args
+        .endpoint_id
+        .split(":")
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("failed to parse hostname"))?;
     if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
         let endpoint_id = EndpointId::from_str(hostname)?;
         iroh_ssh.connect_pubkey(endpoint_id).await
