@@ -28,7 +28,7 @@ pub struct Cli {
     pub remote_cmd: Option<Vec<OsString>>,
 }
 
-#[derive(Subcommand,Debug)]
+#[derive(Subcommand, Debug)]
 pub enum Cmd {
     Connect(ConnectArgs),
     #[command(hide = true)]
