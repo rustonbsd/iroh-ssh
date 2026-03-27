@@ -220,6 +220,111 @@ jobs:
             exit 1
           fi
 
+      - name: Run exit code propagation test (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+
+          BIN_PATH="dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          TEST_KEY_DIR="$(mktemp -d)"
+          TEST_KEY="$TEST_KEY_DIR/id_ed25519"
+
+          cleanup() {
+            if [ -n "${SERVER_PID:-}" ]; then
+              kill "$SERVER_PID" 2>/dev/null || true
+              wait "$SERVER_PID" 2>/dev/null || true
+            fi
+            rm -rf "$TEST_KEY_DIR"
+          }
+
+          trap cleanup EXIT
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keygen -q -t ed25519 -N "" -f "$TEST_KEY"
+          cat "$TEST_KEY.pub" >> "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
+
+          echo "Starting iroh-ssh server for exit code tests..."
+          "$BIN_PATH" server --persist > exit_server_output.txt 2>&1 &
+          SERVER_PID=$!
+
+          echo "Waiting for server to be ready..."
+          for i in {1..30}; do
+            if grep -q 'iroh-ssh.*@[a-f0-9]' exit_server_output.txt 2>/dev/null; then
+              echo "Server is ready"
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "ERROR: Server process died"
+              cat exit_server_output.txt
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat exit_server_output.txt
+
+          CONNECTION_STRING=$(grep 'iroh-ssh' exit_server_output.txt | grep -v 'client ->' | awk '{print $2}' | head -1 || true)
+
+          if [ -z "$CONNECTION_STRING" ]; then
+            echo "ERROR: Could not extract connection string from server output"
+            cat exit_server_output.txt
+            exit 1
+          fi
+
+          run_case() {
+            local name="$1"
+            local expected_exit="$2"
+            shift 2
+
+            local output_file="${name}_output.txt"
+            local actual_exit
+
+            echo "Running ${name}..."
+            set +e
+            if command -v timeout > /dev/null; then
+              timeout 15s "$@" > "$output_file" 2>&1
+              actual_exit=$?
+            else
+              "$@" > "$output_file" 2>&1 &
+              local cmd_pid=$!
+              (
+                sleep 15
+                kill "$cmd_pid" 2>/dev/null || true
+              ) &
+              local watchdog_pid=$!
+              wait "$cmd_pid"
+              actual_exit=$?
+              kill "$watchdog_pid" 2>/dev/null || true
+              wait "$watchdog_pid" 2>/dev/null || true
+            fi
+            set -e
+
+            cat "$output_file"
+
+            if [ "$actual_exit" -ne "$expected_exit" ]; then
+              echo "ERROR: ${name} expected exit ${expected_exit}, got ${actual_exit}"
+              exit 1
+            fi
+
+            echo "SUCCESS: ${name} exited with ${actual_exit}"
+          }
+
+          COMMON_ARGS=(
+            -i "$TEST_KEY"
+            -o "StrictHostKeyChecking=no"
+            -o "UserKnownHostsFile=/dev/null"
+            -o "BatchMode=yes"
+            "$CONNECTION_STRING"
+          )
+
+          run_case normal-exit 0 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 0'"
+          run_case custom-exit 197 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 197'"
+          run_case remote-sigterm 255 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'kill -TERM \$\$'"
+
       - name: Run integration test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

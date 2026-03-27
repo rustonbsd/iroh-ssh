@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::str::FromStr as _;
+use std::{path::PathBuf, process::ExitStatus, str::FromStr as _};
 
 use anyhow::bail;
 use homedir::my_home;
@@ -192,7 +191,37 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
         )
         .await?;
 
-    ssh_process.wait().await?;
+    let status = ssh_process.wait().await?;
+
+    // this kills the process (ok is just here for now compile errors)
+    exit_with_code(status);
 
     Ok(())
+}
+
+#[cfg(unix)]
+fn exit_with_code(status: ExitStatus) {
+    use std::os::unix::process::ExitStatusExt;
+
+    if let Some(code) = status.code() {
+        std::process::exit(code);
+    }
+
+    // if ssh gets killed locally
+    if let Some(sig) = status.signal() {
+        unsafe {
+            libc::signal(sig, libc::SIG_DFL);
+            libc::kill(libc::getpid(), sig);
+        }
+        // fallback if kill fails (same as windows)
+        std::process::exit(128 + sig);
+    }
+
+    // fallback to 1 if don't know
+    std::process::exit(1);
+}
+
+#[cfg(not(unix))]
+fn exit_with_code(status: ExitStatus) {
+    std::process::exit(status.code().unwrap_or(1));
 }
