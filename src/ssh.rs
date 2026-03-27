@@ -142,18 +142,22 @@ impl IrohSsh {
         relay_urls: &[String],
         extra_relay_urls: &[String],
     ) -> anyhow::Result<Child> {
-        let c_exe = std::env::current_exe()?;
         let cmd = &mut Command::new("ssh");
 
-        let mut proxy_cmd = format!("{} proxy", c_exe.display());
-        for url in relay_urls {
-            proxy_cmd.push_str(&format!(" --relay-url {url}"));
+        // if host is not ed25519 pub key, just use ssh directly without proxy command
+        let hostname = target.split("@").last().unwrap_or_default().split(":").next().unwrap_or_default();
+        if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
+            let c_exe = std::env::current_exe()?;
+            let mut proxy_cmd = format!("{} proxy", c_exe.display());
+            for url in relay_urls {
+                proxy_cmd.push_str(&format!(" --relay-url {url}"));
+            }
+            for url in extra_relay_urls {
+                proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
+            }
+            proxy_cmd.push_str(" %h");
+            cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
         }
-        for url in extra_relay_urls {
-            proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
-        }
-        proxy_cmd.push_str(" %h");
-        cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());
