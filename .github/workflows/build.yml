@@ -323,7 +323,54 @@ jobs:
 
           run_case normal-exit-0 0 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 0'"
           run_case custom-exit-197 197 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 197'"
-          run_case remote-sigterm-255 255 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'kill -TERM \$\$'"
+
+          REMOTE_TERMINATE_COMMAND="sh -c 'kill -TERM \$\$'"
+          PROXY_COMMAND="$BIN_PATH proxy %h"
+          BASELINE_OUTPUT_FILE="remote-sigterm-baseline-output.txt"
+
+          echo "Running remote-sigterm baseline with stock ssh..."
+          set +e
+          if command -v timeout > /dev/null; then
+            timeout 15s ssh \
+              -i "$TEST_KEY" \
+              -o "StrictHostKeyChecking=no" \
+              -o "UserKnownHostsFile=/dev/null" \
+              -o "BatchMode=yes" \
+              -o "ProxyCommand=$PROXY_COMMAND" \
+              "$CONNECTION_STRING" \
+              "$REMOTE_TERMINATE_COMMAND" > "$BASELINE_OUTPUT_FILE" 2>&1
+            BASELINE_EXIT=$?
+          else
+            ssh \
+              -i "$TEST_KEY" \
+              -o "StrictHostKeyChecking=no" \
+              -o "UserKnownHostsFile=/dev/null" \
+              -o "BatchMode=yes" \
+              -o "ProxyCommand=$PROXY_COMMAND" \
+              "$CONNECTION_STRING" \
+              "$REMOTE_TERMINATE_COMMAND" > "$BASELINE_OUTPUT_FILE" 2>&1 &
+            baseline_pid=$!
+            (
+              sleep 15
+              kill "$baseline_pid" 2>/dev/null || true
+            ) &
+            watchdog_pid=$!
+            wait "$baseline_pid"
+            BASELINE_EXIT=$?
+            kill "$watchdog_pid" 2>/dev/null || true
+            wait "$watchdog_pid" 2>/dev/null || true
+          fi
+          set -e
+
+          cat "$BASELINE_OUTPUT_FILE"
+          echo "Stock ssh baseline exit: $BASELINE_EXIT"
+
+          if [ "$BASELINE_EXIT" -eq 0 ]; then
+            echo "ERROR: Stock ssh returned 0 for forced remote termination"
+            exit 1
+          fi
+
+          run_case remote-sigterm "$BASELINE_EXIT" "$BIN_PATH" "${COMMON_ARGS[@]}" "$REMOTE_TERMINATE_COMMAND"
 
       - name: Run integration test (Windows)
         if: runner.os == 'Windows'
@@ -431,14 +478,14 @@ jobs:
 
             New-Item -ItemType Directory -Force -Path $UserSshDir | Out-Null
             Add-Content -Path $UserAuthorizedKeys -Value $PublicKey
-            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "$env:USERNAME:F" /grant:r "SYSTEM:F" | Out-Null
+            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "${env:USERNAME}:(F)" /grant:r "SYSTEM:(F)" | Out-Null
 
             $CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
             $CurrentPrincipal = [Security.Principal.WindowsPrincipal]::new($CurrentIdentity)
             if ($CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
               $AdminAuthorizedKeys = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
               Add-Content -Path $AdminAuthorizedKeys -Value $PublicKey
-              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:F" /grant:r "SYSTEM:F" | Out-Null
+              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:(F)" /grant:r "SYSTEM:(F)" | Out-Null
             }
 
             Write-Host "Starting iroh-ssh server for exit code tests..."
@@ -482,7 +529,16 @@ jobs:
             Invoke-ExitCase -Name 'custom-exit' -ExpectedExit 197 -RemoteCommand 'cmd /c exit 197'
 
             $RemoteTerminateCommand = 'powershell -NoProfile -NonInteractive -Command "Stop-Process -Id $PID -Force"'
-            $BaselineOutput = & ssh.exe @CommonArgs $RemoteTerminateCommand 2>&1 | Out-String
+            $ProxyCommand = ('"{0}" proxy %h' -f $BinPath)
+            $BaselineArgs = @(
+              '-i', $TestKey,
+              '-o', 'StrictHostKeyChecking=no',
+              '-o', 'UserKnownHostsFile=NUL',
+              '-o', 'BatchMode=yes',
+              '-o', "ProxyCommand=$ProxyCommand",
+              $ConnectionString
+            )
+            $BaselineOutput = & ssh.exe @BaselineArgs $RemoteTerminateCommand 2>&1 | Out-String
             $BaselineExit = $LASTEXITCODE
 
             Write-Host "Stock ssh baseline output:"
