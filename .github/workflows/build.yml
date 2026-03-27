@@ -321,9 +321,9 @@ jobs:
             "$CONNECTION_STRING"
           )
 
-          run_case normal-exit 0 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 0'"
-          run_case custom-exit 197 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 197'"
-          run_case remote-sigterm 255 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'kill -TERM \$\$'"
+          run_case normal-exit-0 0 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 0'"
+          run_case custom-exit-197 197 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 197'"
+          run_case remote-sigterm-255 255 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'kill -TERM \$\$'"
 
       - name: Run integration test (Windows)
         if: runner.os == 'Windows'
@@ -387,4 +387,118 @@ jobs:
             Stop-Job -Job $ServerJob
             Remove-Job -Job $ServerJob
             exit 1
+          }
+
+      - name: Run exit code propagation test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $BinPath = (Resolve-Path "dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}").Path
+          $TestKeyDir = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+          $TestKey = Join-Path $TestKeyDir "id_ed25519"
+          $ServerJob = $null
+
+          function Invoke-ExitCase {
+            param(
+              [string]$Name,
+              [int]$ExpectedExit,
+              [string]$RemoteCommand,
+              [string]$Executable = $BinPath
+            )
+
+            Write-Host "Running $Name..."
+            $Output = & $Executable @CommonArgs $RemoteCommand 2>&1 | Out-String
+            $ActualExit = $LASTEXITCODE
+            Write-Host $Output
+
+            if ($ActualExit -ne $ExpectedExit) {
+              throw "$Name expected exit $ExpectedExit, got $ActualExit"
+            }
+
+            Write-Host "SUCCESS: $Name exited with $ActualExit"
+          }
+
+          try {
+            New-Item -ItemType Directory -Force -Path $TestKeyDir | Out-Null
+            & ssh-keygen -q -t ed25519 -N "" -f $TestKey
+
+            $PublicKey = (Get-Content "$TestKey.pub" -Raw).Trim()
+            $UserSshDir = Join-Path $env:USERPROFILE ".ssh"
+            $UserAuthorizedKeys = Join-Path $UserSshDir "authorized_keys"
+
+            New-Item -ItemType Directory -Force -Path $UserSshDir | Out-Null
+            Add-Content -Path $UserAuthorizedKeys -Value $PublicKey
+            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "$env:USERNAME:F" /grant:r "SYSTEM:F" | Out-Null
+
+            $CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $CurrentPrincipal = [Security.Principal.WindowsPrincipal]::new($CurrentIdentity)
+            if ($CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+              $AdminAuthorizedKeys = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+              Add-Content -Path $AdminAuthorizedKeys -Value $PublicKey
+              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:F" /grant:r "SYSTEM:F" | Out-Null
+            }
+
+            Write-Host "Starting iroh-ssh server for exit code tests..."
+            $ServerJob = Start-Job -ScriptBlock {
+              param($Path)
+              & $Path server --persist
+            } -ArgumentList $BinPath
+
+            $ServerOutput = ""
+            $ConnectionString = $null
+            for ($i = 0; $i -lt 30; $i++) {
+              $ServerOutput = (Receive-Job -Job $ServerJob -Keep 2>$null | Out-String)
+              if ($ServerOutput -match 'iroh-ssh ([^@]+@[a-f0-9]{64})') {
+                $ConnectionString = $Matches[1]
+                break
+              }
+              if ($ServerJob.State -in @('Completed', 'Failed', 'Stopped')) {
+                break
+              }
+              Start-Sleep -Seconds 1
+            }
+
+            Write-Host "Server output:"
+            Write-Host $ServerOutput
+
+            if (-not $ConnectionString) {
+              throw "Could not extract connection string from server output"
+            }
+
+            Write-Host "Connection string: $ConnectionString"
+
+            $script:CommonArgs = @(
+              '-i', $TestKey,
+              '-o', 'StrictHostKeyChecking=no',
+              '-o', 'UserKnownHostsFile=NUL',
+              '-o', 'BatchMode=yes',
+              $ConnectionString
+            )
+
+            Invoke-ExitCase -Name 'normal-exit' -ExpectedExit 0 -RemoteCommand 'cmd /c exit 0'
+            Invoke-ExitCase -Name 'custom-exit' -ExpectedExit 197 -RemoteCommand 'cmd /c exit 197'
+
+            $RemoteTerminateCommand = 'powershell -NoProfile -NonInteractive -Command "Stop-Process -Id $PID -Force"'
+            $BaselineOutput = & ssh.exe @CommonArgs $RemoteTerminateCommand 2>&1 | Out-String
+            $BaselineExit = $LASTEXITCODE
+
+            Write-Host "Stock ssh baseline output:"
+            Write-Host $BaselineOutput
+            Write-Host "Stock ssh baseline exit: $BaselineExit"
+
+            if ($BaselineExit -eq 0) {
+              throw "Stock ssh returned 0 for forced remote termination, refusing to treat that as a valid signal-style failure"
+            }
+
+            Invoke-ExitCase -Name 'remote-termination' -ExpectedExit $BaselineExit -RemoteCommand $RemoteTerminateCommand
+          }
+          finally {
+            if ($ServerJob) {
+              Stop-Job -Job $ServerJob -ErrorAction SilentlyContinue
+              Remove-Job -Job $ServerJob -Force -ErrorAction SilentlyContinue
+            }
+            Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
           }
