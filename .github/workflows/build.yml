@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -79,7 +79,7 @@ jobs:
           ls -la "${OUTDIR}"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: iroh-ssh-${{ matrix.platform.target }}
           path: dist/${{ matrix.platform.target }}/*
@@ -109,7 +109,7 @@ jobs:
 
     steps:
       - name: Download binary artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: iroh-ssh-${{ matrix.platform.target }}
           path: dist/${{ matrix.platform.target }}
@@ -466,6 +466,7 @@ jobs:
             }
 
             Write-Host "SUCCESS: $Name exited with $ActualExit"
+            $global:LASTEXITCODE = 0
           }
 
           try {
@@ -548,6 +549,8 @@ jobs:
             if ($BaselineExit -eq 0) {
               throw "Stock ssh returned 0 for forced remote termination, refusing to treat that as a valid signal-style failure"
             }
+
+            $global:LASTEXITCODE = 0
 
             Invoke-ExitCase -Name 'remote-termination' -ExpectedExit $BaselineExit -RemoteCommand $RemoteTerminateCommand
           }
