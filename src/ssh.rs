@@ -7,8 +7,9 @@ use homedir::my_home;
 use std::sync::Arc;
 
 use iroh::{
-    RelayConfig,
-    endpoint::{Connection, RelayMode}, protocol::{ProtocolHandler, Router}, Endpoint, EndpointId, RelayUrl, SecretKey
+    Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
+    endpoint::{Connection, RelayMode},
+    protocol::{ProtocolHandler, Router},
 };
 use tokio::{
     net::TcpStream,
@@ -68,9 +69,7 @@ impl Builder {
                     "dot_ssh_integration: Failed to load/create SSH keys: {:#}",
                     e
                 );
-                eprintln!(
-                    "Warning: Failed to load/create persistent SSH keys: {e:#}"
-                );
+                eprintln!("Warning: Failed to load/create persistent SSH keys: {e:#}");
                 eprintln!("Continuing with ephemeral keys...");
             }
         }
@@ -154,8 +153,7 @@ impl IrohSsh {
             proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
         }
         proxy_cmd.push_str(" %h");
-        cmd.arg("-o")
-            .arg(format!("ProxyCommand={proxy_cmd}"));
+        cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());
@@ -216,29 +214,25 @@ impl IrohSsh {
 
     pub async fn connect(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
         let inner = self.inner.as_ref().expect("inner not set");
-        let conn = inner.endpoint.connect(endpoint_id, &IrohSsh::ALPN()).await?;
+        let conn = inner
+            .endpoint
+            .connect(endpoint_id, &IrohSsh::ALPN())
+            .await?;
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
-        let a_to_b = async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
+        let a_to_b = async move {
+            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
+            iroh_send.finish().ok();
+            res
+        };
         let b_to_a = async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
 
-        tokio::select! {
-            result = a_to_b => {
-                let _ = result;
-            },
-            result = b_to_a => {
-                let _ = result;
-            },
-        };
+        let (_, _) = tokio::join!(a_to_b, b_to_a);
         Ok(())
     }
 
     pub fn endpoint_id(&self) -> EndpointId {
-        self.inner
-            .as_ref()
-            .expect("inner not set")
-            .endpoint
-            .id()
+        self.inner.as_ref().expect("inner not set").endpoint.id()
     }
 }
 
@@ -256,19 +250,15 @@ impl ProtocolHandler for IrohSsh {
 
                         let (mut local_read, mut local_write) = ssh_stream.split();
 
-                        let a_to_b =
-                            async move { tokio::io::copy(&mut local_read, &mut iroh_send).await };
+                        let a_to_b = async move {
+                            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
+                            iroh_send.finish().ok();
+                            res
+                        };
                         let b_to_a =
                             async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
 
-                        tokio::select! {
-                            result = a_to_b => {
-                                println!("SSH->Iroh stream ended: {result:?}");
-                            },
-                            result = b_to_a => {
-                                println!("Iroh->SSH stream ended: {result:?}");
-                            },
-                        };
+                        let (_, _) = tokio::join!(a_to_b, b_to_a);
                     }
                     Err(e) => {
                         println!("Failed to connect to SSH server: {e}");
