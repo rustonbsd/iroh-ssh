@@ -301,10 +301,10 @@ jobs:
             echo "Running ${name}..."
             set +e
             if command -v timeout > /dev/null; then
-              timeout 15s "$@" > "$output_file" 2>&1
+              timeout 15s "$@" < /dev/null > "$output_file" 2>&1
               actual_exit=$?
             else
-              "$@" > "$output_file" 2>&1 &
+              "$@" < /dev/null > "$output_file" 2>&1 &
               local cmd_pid=$!
               (
                 sleep 15
@@ -344,10 +344,10 @@ jobs:
             echo "Running ${name}..."
             set +e
             if command -v timeout > /dev/null; then
-              timeout 15s "$@" > "$output_file" 2>&1
+              timeout 15s "$@" < /dev/null > "$output_file" 2>&1
               actual_exit=$?
             else
-              "$@" > "$output_file" 2>&1 &
+              "$@" < /dev/null > "$output_file" 2>&1 &
               local cmd_pid=$!
               (
                 sleep 15
@@ -433,7 +433,7 @@ jobs:
             exit 1
           fi
 
-          run_case remote-sigterm "$BASELINE_EXIT" "$BIN_PATH" "${COMMON_ARGS[@]}" "$REMOTE_TERMINATE_COMMAND"
+          run_case remote-sigterm "$BASELINE_EXIT" "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CONNECTION_STRING" "$REMOTE_TERMINATE_COMMAND"
 
       - name: Run integration test (Windows)
         if: runner.os == 'Windows'
@@ -610,15 +610,15 @@ jobs:
             $EndpointHost = $ConnectionString.Split('@')[1]
             $UserSshConfig = Join-Path $UserSshDir "config"
 
-            @"
-
-            Host iroh-endpoint-config
-              HostName $EndpointHost
-
-            Host iroh-localhost-config
-              HostName localhost
-              User $CurrentUser
-            "@ | Add-Content -Path $UserSshConfig
+            @(
+              '',
+              'Host iroh-endpoint-config',
+              "  HostName $EndpointHost",
+              '',
+              'Host iroh-localhost-config',
+              '  HostName localhost',
+              "  User $CurrentUser"
+            ) | Add-Content -Path $UserSshConfig
 
             $script:BaseArgs = @(
               '-i', $TestKey,
