@@ -275,6 +275,64 @@ jobs:
             exit 1
           fi
 
+          CURRENT_USER="$(id -un)"
+          ENDPOINT_HOST="${CONNECTION_STRING#*@}"
+          SSH_CONFIG_FILE="$HOME/.ssh/config"
+
+          cat >> "$SSH_CONFIG_FILE" <<EOF
+
+          Host iroh-endpoint-config
+            HostName $ENDPOINT_HOST
+
+          Host iroh-localhost-config
+            HostName localhost
+            User $CURRENT_USER
+          EOF
+          chmod 600 "$SSH_CONFIG_FILE"
+
+          run_success_case() {
+            local name="$1"
+            local expected_text="$2"
+            shift 2
+
+            local output_file="${name}_output.txt"
+            local actual_exit
+
+            echo "Running ${name}..."
+            set +e
+            if command -v timeout > /dev/null; then
+              timeout 15s "$@" > "$output_file" 2>&1
+              actual_exit=$?
+            else
+              "$@" > "$output_file" 2>&1 &
+              local cmd_pid=$!
+              (
+                sleep 15
+                kill "$cmd_pid" 2>/dev/null || true
+              ) &
+              local watchdog_pid=$!
+              wait "$cmd_pid"
+              actual_exit=$?
+              kill "$watchdog_pid" 2>/dev/null || true
+              wait "$watchdog_pid" 2>/dev/null || true
+            fi
+            set -e
+
+            cat "$output_file"
+
+            if [ "$actual_exit" -ne 0 ]; then
+              echo "ERROR: ${name} expected exit 0, got ${actual_exit}"
+              exit 1
+            fi
+
+            if ! grep -q "$expected_text" "$output_file"; then
+              echo "ERROR: ${name} missing expected output '${expected_text}'"
+              exit 1
+            fi
+
+            echo "SUCCESS: ${name}"
+          }
+
           run_case() {
             local name="$1"
             local expected_exit="$2"
@@ -313,16 +371,21 @@ jobs:
             echo "SUCCESS: ${name} exited with ${actual_exit}"
           }
 
-          COMMON_ARGS=(
+          COMMON_SSH_ARGS=(
             -i "$TEST_KEY"
             -o "StrictHostKeyChecking=no"
             -o "UserKnownHostsFile=/dev/null"
             -o "BatchMode=yes"
-            "$CONNECTION_STRING"
           )
 
-          run_case normal-exit-0 0 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 0'"
-          run_case custom-exit-197 197 "$BIN_PATH" "${COMMON_ARGS[@]}" "sh -c 'exit 197'"
+          run_success_case inline-endpoint-id inline-endpoint-id "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CONNECTION_STRING" "printf inline-endpoint-id"
+          run_success_case inline-localhost inline-localhost "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CURRENT_USER@localhost" "printf inline-localhost"
+          run_success_case inline-loopback-ip inline-loopback-ip "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CURRENT_USER@127.0.0.1" "printf inline-loopback-ip"
+          run_success_case config-endpoint-explicit-user config-endpoint-explicit-user "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CURRENT_USER@iroh-endpoint-config" "printf config-endpoint-explicit-user"
+          run_success_case config-localhost-config-user config-localhost-config-user "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "iroh-localhost-config" "printf config-localhost-config-user"
+
+          run_case normal-exit-0 0 "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CONNECTION_STRING" "sh -c 'exit 0'"
+          run_case custom-exit-197 197 "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$CONNECTION_STRING" "sh -c 'exit 197'"
 
           REMOTE_TERMINATE_COMMAND="sh -c 'kill -TERM \$\$'"
           PROXY_COMMAND="$BIN_PATH proxy %h"
@@ -448,16 +511,41 @@ jobs:
           $TestKey = Join-Path $TestKeyDir "id_ed25519"
           $ServerJob = $null
 
+          function Invoke-SuccessCase {
+            param(
+              [string]$Name,
+              [string]$ExpectedText,
+              [string]$Target
+            )
+
+            Write-Host "Running $Name..."
+            $Output = & $BinPath @BaseArgs $Target "cmd /c echo $ExpectedText" 2>&1 | Out-String
+            $ActualExit = $LASTEXITCODE
+            Write-Host $Output
+
+            if ($ActualExit -ne 0) {
+              throw "$Name expected exit 0, got $ActualExit"
+            }
+
+            if ($Output -notmatch [regex]::Escape($ExpectedText)) {
+              throw "$Name missing expected output $ExpectedText"
+            }
+
+            Write-Host "SUCCESS: $Name exited with $ActualExit"
+            $global:LASTEXITCODE = 0
+          }
+
           function Invoke-ExitCase {
             param(
               [string]$Name,
               [int]$ExpectedExit,
+              [string]$Target,
               [string]$RemoteCommand,
               [string]$Executable = $BinPath
             )
 
             Write-Host "Running $Name..."
-            $Output = & $Executable @CommonArgs $RemoteCommand 2>&1 | Out-String
+            $Output = & $Executable @BaseArgs $Target $RemoteCommand 2>&1 | Out-String
             $ActualExit = $LASTEXITCODE
             Write-Host $Output
 
@@ -518,24 +606,40 @@ jobs:
 
             Write-Host "Connection string: $ConnectionString"
 
-            $script:CommonArgs = @(
+            $CurrentUser = $env:USERNAME
+            $EndpointHost = $ConnectionString.Split('@')[1]
+            $UserSshConfig = Join-Path $UserSshDir "config"
+
+            @"
+
+            Host iroh-endpoint-config
+              HostName $EndpointHost
+
+            Host iroh-localhost-config
+              HostName localhost
+              User $CurrentUser
+            "@ | Add-Content -Path $UserSshConfig
+
+            $script:BaseArgs = @(
               '-i', $TestKey,
               '-o', 'StrictHostKeyChecking=no',
               '-o', 'UserKnownHostsFile=NUL',
-              '-o', 'BatchMode=yes',
-              $ConnectionString
+              '-o', 'BatchMode=yes'
             )
 
-            Invoke-ExitCase -Name 'normal-exit' -ExpectedExit 0 -RemoteCommand 'cmd /c exit 0'
-            Invoke-ExitCase -Name 'custom-exit' -ExpectedExit 197 -RemoteCommand 'cmd /c exit 197'
+            Invoke-SuccessCase -Name 'inline-endpoint-id' -ExpectedText 'inline-endpoint-id' -Target $ConnectionString
+            Invoke-SuccessCase -Name 'inline-localhost' -ExpectedText 'inline-localhost' -Target ("{0}@localhost" -f $CurrentUser)
+            Invoke-SuccessCase -Name 'inline-loopback-ip' -ExpectedText 'inline-loopback-ip' -Target ("{0}@127.0.0.1" -f $CurrentUser)
+            Invoke-SuccessCase -Name 'config-endpoint-explicit-user' -ExpectedText 'config-endpoint-explicit-user' -Target ("{0}@iroh-endpoint-config" -f $CurrentUser)
+            Invoke-SuccessCase -Name 'config-localhost-config-user' -ExpectedText 'config-localhost-config-user' -Target 'iroh-localhost-config'
+
+            Invoke-ExitCase -Name 'normal-exit' -ExpectedExit 0 -Target $ConnectionString -RemoteCommand 'cmd /c exit 0'
+            Invoke-ExitCase -Name 'custom-exit' -ExpectedExit 197 -Target $ConnectionString -RemoteCommand 'cmd /c exit 197'
 
             $RemoteTerminateCommand = 'powershell -NoProfile -NonInteractive -Command "Stop-Process -Id $PID -Force"'
             $ProxyCommand = ('"{0}" proxy %h' -f $BinPath)
             $BaselineArgs = @(
-              '-i', $TestKey,
-              '-o', 'StrictHostKeyChecking=no',
-              '-o', 'UserKnownHostsFile=NUL',
-              '-o', 'BatchMode=yes',
+              @BaseArgs,
               '-o', "ProxyCommand=$ProxyCommand",
               $ConnectionString
             )
@@ -552,7 +656,7 @@ jobs:
 
             $global:LASTEXITCODE = 0
 
-            Invoke-ExitCase -Name 'remote-termination' -ExpectedExit $BaselineExit -RemoteCommand $RemoteTerminateCommand
+            Invoke-ExitCase -Name 'remote-termination' -ExpectedExit $BaselineExit -Target $ConnectionString -RemoteCommand $RemoteTerminateCommand
           }
           finally {
             if ($ServerJob) {
