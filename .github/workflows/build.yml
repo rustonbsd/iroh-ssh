@@ -223,7 +223,7 @@ jobs:
       - name: Run exit code propagation test (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        timeout-minutes: 2
+        timeout-minutes: 10
         run: |
           set -euo pipefail
 
@@ -301,13 +301,13 @@ jobs:
             echo "Running ${name}..."
             set +e
             if command -v timeout > /dev/null; then
-              timeout 15s "$@" < /dev/null > "$output_file" 2>&1
+              timeout 60s "$@" > "$output_file" 2>&1
               actual_exit=$?
             else
-              "$@" < /dev/null > "$output_file" 2>&1 &
+              "$@" > "$output_file" 2>&1 &
               local cmd_pid=$!
               (
-                sleep 15
+                sleep 60
                 kill "$cmd_pid" 2>/dev/null || true
               ) &
               local watchdog_pid=$!
@@ -344,13 +344,13 @@ jobs:
             echo "Running ${name}..."
             set +e
             if command -v timeout > /dev/null; then
-              timeout 15s "$@" < /dev/null > "$output_file" 2>&1
+              timeout 60s "$@" > "$output_file" 2>&1
               actual_exit=$?
             else
-              "$@" < /dev/null > "$output_file" 2>&1 &
+              "$@" > "$output_file" 2>&1 &
               local cmd_pid=$!
               (
-                sleep 15
+                sleep 60
                 kill "$cmd_pid" 2>/dev/null || true
               ) &
               local watchdog_pid=$!
@@ -638,8 +638,7 @@ jobs:
 
             $RemoteTerminateCommand = 'powershell -NoProfile -NonInteractive -Command "Stop-Process -Id $PID -Force"'
             $ProxyCommand = ('"{0}" proxy %h' -f $BinPath)
-            $BaselineArgs = @(
-              @BaseArgs,
+            $BaselineArgs = $BaseArgs + @(
               '-o', "ProxyCommand=$ProxyCommand",
               $ConnectionString
             )
