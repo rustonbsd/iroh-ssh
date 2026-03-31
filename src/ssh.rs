@@ -12,8 +12,7 @@ use iroh::{
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
-    net::TcpStream,
-    process::{Child, Command},
+    io::AsyncWriteExt, net::TcpStream, process::{Child, Command}
 };
 
 impl Builder {
@@ -155,20 +154,16 @@ impl IrohSsh {
     ) -> anyhow::Result<Child> {
         let cmd = &mut Command::new("ssh");
 
-        // if host is not ed25519 pub key, just use ssh directly without proxy command
-        let hostname = target.split("@").last().unwrap_or_default().split(":").next().unwrap_or_default();
-        if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
-            let c_exe = std::env::current_exe()?;
-            let mut proxy_cmd = format!("{} proxy", c_exe.display());
-            for url in relay_urls {
-                proxy_cmd.push_str(&format!(" --relay-url {url}"));
-            }
-            for url in extra_relay_urls {
-                proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
-            }
-            proxy_cmd.push_str(" %h");
-            cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
+        let c_exe = std::env::current_exe()?;
+        let mut proxy_cmd = format!("{} proxy", c_exe.display());
+        for url in relay_urls {
+            proxy_cmd.push_str(&format!(" --relay-url {url}"));
         }
+        for url in extra_relay_urls {
+            proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
+        }
+        proxy_cmd.push_str(" %h:%p");
+        cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
 
         if let Some(p) = ssh_opts.port {
             cmd.arg("-p").arg(p.to_string());
@@ -227,7 +222,7 @@ impl IrohSsh {
         Ok(ssh_process)
     }
 
-    pub async fn connect(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
+    pub async fn connect_pubkey(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
         let inner = self.inner.as_ref().expect("inner not set");
         let conn = inner
             .endpoint
@@ -245,6 +240,22 @@ impl IrohSsh {
         let (_, _) = tokio::join!(a_to_b, b_to_a);
         Ok(())
     }
+
+    pub async fn connect_tcpip(&self, host_addr: &str) -> anyhow::Result<()> {
+        let conn = tokio::net::TcpStream::connect(host_addr).await?;
+        let (mut tcp_read, mut tcp_write) = conn.into_split();
+        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
+        let a_to_b = async move {
+            let res = tokio::io::copy(&mut local_read, &mut tcp_write).await;
+            tcp_write.shutdown().await.ok();
+            res
+        };
+        let b_to_a = async move { tokio::io::copy(&mut tcp_read, &mut local_write).await };
+
+        let (_, _) = tokio::join!(a_to_b, b_to_a);
+        Ok(())
+    }
+
 
     pub fn endpoint_id(&self) -> EndpointId {
         self.inner.as_ref().expect("inner not set").endpoint.id()

@@ -164,14 +164,14 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
         .extra_relay_urls(parse_relay_urls(&proxy_args.extra_relay_url)?)
         .build()
         .await?;
-    let endpoint_id = EndpointId::from_str(if proxy_args.endpoint_id.len() == 64 {
-        &proxy_args.endpoint_id
-    } else if proxy_args.endpoint_id.len() > 64 {
-        &proxy_args.endpoint_id[proxy_args.endpoint_id.len() - 64..]
+    let hostname = proxy_args.endpoint_id.split(":").next().ok_or_else(|| anyhow::anyhow!("failed to parse hostname"))?;
+    if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
+        let endpoint_id = EndpointId::from_str(hostname)?;
+        iroh_ssh.connect_pubkey(endpoint_id).await
     } else {
-        return Err(anyhow::anyhow!("invalid endpoint id length"));
-    })?;
-    iroh_ssh.connect(endpoint_id).await
+        // fallback to dns base (or ip) HostName connection (no iroh)
+        iroh_ssh.connect_tcpip(&proxy_args.endpoint_id).await
+    }
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
@@ -200,7 +200,7 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
 }
 
 #[cfg(unix)]
-fn exit_with_code(status: ExitStatus) {
+pub(crate) fn exit_with_code(status: ExitStatus) {
     use std::os::unix::process::ExitStatusExt;
 
     if let Some(code) = status.code() {
@@ -222,6 +222,6 @@ fn exit_with_code(status: ExitStatus) {
 }
 
 #[cfg(not(unix))]
-fn exit_with_code(status: ExitStatus) {
+pub(crate) fn exit_with_code(status: ExitStatus) {
     std::process::exit(status.code().unwrap_or(1));
 }
