@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::{process::ExitStatus, str::FromStr as _};
 
 use anyhow::bail;
 use homedir::my_home;
@@ -141,14 +141,14 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
         .extra_relay_urls(parse_relay_urls(&proxy_args.extra_relay_url)?)
         .build()
         .await?;
-    let endpoint_id = EndpointId::from_str(if proxy_args.endpoint_id.len() == 64 {
-        &proxy_args.endpoint_id
-    } else if proxy_args.endpoint_id.len() > 64 {
-        &proxy_args.endpoint_id[proxy_args.endpoint_id.len() - 64..]
+    let hostname = proxy_args.endpoint_id.split(":").next().ok_or_else(|| anyhow::anyhow!("failed to parse hostname"))?;
+    if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
+        let endpoint_id = EndpointId::from_str(hostname)?;
+        iroh_ssh.connect_pubkey(endpoint_id).await
     } else {
-        return Err(anyhow::anyhow!("invalid endpoint id length"));
-    })?;
-    iroh_ssh.connect(endpoint_id).await
+        // fallback to dns base (or ip) HostName connection (no iroh)
+        iroh_ssh.connect_tcpip(&proxy_args.endpoint_id).await
+    }
 }
 
 pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
@@ -168,7 +168,37 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
         )
         .await?;
 
-    ssh_process.wait().await?;
+    let status = ssh_process.wait().await?;
+
+    // this kills the process (ok is just here for now compile errors)
+    exit_with_code(status);
 
     Ok(())
+}
+
+#[cfg(unix)]
+pub(crate) fn exit_with_code(status: ExitStatus) {
+    use std::os::unix::process::ExitStatusExt;
+
+    if let Some(code) = status.code() {
+        std::process::exit(code);
+    }
+
+    // if ssh gets killed locally
+    if let Some(sig) = status.signal() {
+        unsafe {
+            libc::signal(sig, libc::SIG_DFL);
+            libc::kill(libc::getpid(), sig);
+        }
+        // fallback if kill fails (same as windows)
+        std::process::exit(128 + sig);
+    }
+
+    // fallback to 1 if don't know
+    std::process::exit(1);
+}
+
+#[cfg(not(unix))]
+pub(crate) fn exit_with_code(status: ExitStatus) {
+    std::process::exit(status.code().unwrap_or(1));
 }
