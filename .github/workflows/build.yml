@@ -711,7 +711,7 @@ jobs:
 
           # Start server B: custom key-dir
           echo "Starting server with --key-dir $CUSTOM_KEY_DIR..."
-          "$BIN_PATH" server --persist --key-dir "$CUSTOM_KEY_DIR" --ssh-port 2222 > server_custom_output.txt 2>&1 &
+          "$BIN_PATH" server --persist --key-dir "$CUSTOM_KEY_DIR" > server_custom_output.txt 2>&1 &
           SERVER_CUSTOM_PID=$!
 
           for i in {1..30}; do
@@ -764,38 +764,39 @@ jobs:
           # Connect test: default server
           COMMON_SSH_ARGS=(-i "$TEST_KEY" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes")
 
-          echo "Connecting to default server..."
-          set +e
-          CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$DEFAULT_CONN" "echo keydir-default-ok" 2>&1)
-          DEFAULT_EXIT=$?
-          set -e
-          echo "$CONNECT_OUT"
+          run_connect() {
+            local label="$1" target="$2"
+            echo "Connecting to ${label}..."
+            set +e
+            if command -v timeout > /dev/null; then
+              CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo keydir-${label}-ok" 2>&1)
+              CONNECT_EXIT=$?
+            else
+              "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo keydir-${label}-ok" > connect_${label}.txt 2>&1 &
+              local cpid=$!
+              ( sleep 30; kill "$cpid" 2>/dev/null ) &
+              local wpid=$!
+              wait "$cpid"
+              CONNECT_EXIT=$?
+              kill "$wpid" 2>/dev/null || true
+              wait "$wpid" 2>/dev/null || true
+              CONNECT_OUT=$(cat connect_${label}.txt)
+            fi
+            set -e
+            echo "$CONNECT_OUT"
 
-          if echo "$CONNECT_OUT" | grep -q "keydir-default-ok"; then
-            echo "SUCCESS: Connected to default server"
-          elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$DEFAULT_EXIT" -eq 255 ]; then
-            echo "SUCCESS: Reached SSH auth on default server"
-          else
-            echo "ERROR: Could not reach default server"
-            exit 1
-          fi
+            if echo "$CONNECT_OUT" | grep -q "keydir-${label}-ok"; then
+              echo "SUCCESS: Connected to ${label}"
+            elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$CONNECT_EXIT" -eq 255 ]; then
+              echo "SUCCESS: Reached SSH auth on ${label}"
+            else
+              echo "ERROR: Could not reach ${label}"
+              exit 1
+            fi
+          }
 
-          # Connect test: custom key-dir server (port 2222)
-          echo "Connecting to custom key-dir server..."
-          set +e
-          CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" -p 2222 "$CUSTOM_CONN" "echo keydir-custom-ok" 2>&1)
-          CUSTOM_EXIT=$?
-          set -e
-          echo "$CONNECT_OUT"
-
-          if echo "$CONNECT_OUT" | grep -q "keydir-custom-ok"; then
-            echo "SUCCESS: Connected to custom key-dir server"
-          elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$CUSTOM_EXIT" -eq 255 ]; then
-            echo "SUCCESS: Reached SSH auth on custom key-dir server"
-          else
-            echo "ERROR: Could not reach custom key-dir server"
-            exit 1
-          fi
+          run_connect "default-server" "$DEFAULT_CONN"
+          run_connect "custom-keydir-server" "$CUSTOM_CONN"
 
       - name: Run key-dir test (Windows)
         if: runner.os == 'Windows'
@@ -860,7 +861,7 @@ jobs:
             Write-Host "Starting server with --key-dir $CustomKeyDir..."
             $ServerCustomJob = Start-Job -ScriptBlock {
               param($Path, $Dir)
-              & $Path server --persist --key-dir $Dir --ssh-port 2222
+              & $Path server --persist --key-dir $Dir
             } -ArgumentList $BinPath, $CustomKeyDir
 
             $CustomConn = $null
@@ -930,7 +931,7 @@ jobs:
 
             # Connect test: custom key-dir server
             Write-Host "Connecting to custom key-dir server..."
-            $ConnectOut = & $BinPath @BaseArgs -p 2222 $CustomConn "cmd /c echo keydir-custom-ok" 2>&1 | Out-String
+            $ConnectOut = & $BinPath @BaseArgs $CustomConn "cmd /c echo keydir-custom-ok" 2>&1 | Out-String
             $ConnExit = $LASTEXITCODE
             Write-Host $ConnectOut
 
