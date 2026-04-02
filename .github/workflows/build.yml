@@ -957,3 +957,305 @@ jobs:
             Remove-Item -Path $CustomKeyDir -Recurse -Force -ErrorAction SilentlyContinue
             Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
           }
+
+      - name: Run service install test (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+
+          BIN_PATH="$(pwd)/dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          CUSTOM_KEY_DIR="svc-test-keys"
+          TEST_KEY_DIR="$(mktemp -d)"
+          TEST_KEY="$TEST_KEY_DIR/id_ed25519"
+
+          cleanup() {
+            sudo "$BIN_PATH" service uninstall 2>/dev/null || true
+            sleep 2
+            sudo rm -f /etc/systemd/system/iroh-ssh-server.service
+            sudo rm -f /usr/local/bin/iroh-ssh
+            sudo systemctl daemon-reload 2>/dev/null || true
+            rm -rf "$(pwd)/$CUSTOM_KEY_DIR" "$TEST_KEY_DIR"
+          }
+          trap cleanup EXIT
+
+          # Prepare SSH key for connect tests
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keygen -q -t ed25519 -N "" -f "$TEST_KEY"
+          cat "$TEST_KEY.pub" >> "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
+          # Service runs as root, so authorize for root too
+          sudo mkdir -p /root/.ssh
+          sudo chmod 700 /root/.ssh
+          cat "$TEST_KEY.pub" | sudo tee -a /root/.ssh/authorized_keys > /dev/null
+          sudo chmod 600 /root/.ssh/authorized_keys
+
+          COMMON_SSH_ARGS=(-i "$TEST_KEY" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes")
+
+          try_connect() {
+            local label="$1" target="$2"
+            echo "Connecting to ${label}..."
+            set +e
+            CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo svc-${label}-ok" 2>&1)
+            CONNECT_EXIT=$?
+            set -e
+            echo "$CONNECT_OUT"
+
+            if echo "$CONNECT_OUT" | grep -q "svc-${label}-ok"; then
+              echo "SUCCESS: Connected to ${label}"
+            elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$CONNECT_EXIT" -eq 255 ]; then
+              echo "SUCCESS: Reached SSH auth on ${label}"
+            else
+              echo "ERROR: Could not reach ${label}"
+              return 1
+            fi
+          }
+
+          echo "Installing service without --key-dir..."
+          sudo "$BIN_PATH" service install --ssh-port 22
+          sleep 5
+
+          if ! sudo systemctl is-active --quiet iroh-ssh-server.service; then
+            echo "ERROR: Service not running"
+            sudo systemctl status iroh-ssh-server.service || true
+            sudo journalctl -u iroh-ssh-server.service --no-pager -n 30 || true
+            exit 1
+          fi
+          echo "Service is running"
+
+          # Wait for keys to appear (service creates them on startup)
+          for i in {1..15}; do
+            if sudo test -f /root/.ssh/irohssh_ed25519.pub; then break; fi
+            sleep 1
+          done
+
+          # Get endpoint from info (run as root to see /root/.ssh keys)
+          INFO_DEFAULT=$(sudo "$BIN_PATH" info 2>&1 || true)
+          echo "Info (service, no key-dir):"
+          echo "$INFO_DEFAULT"
+
+          SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          if [ -z "$SVC_ENDPOINT_DEFAULT" ]; then
+            echo "ERROR: Could not extract service endpoint from info"
+            exit 1
+          fi
+          echo "Service endpoint (default): $SVC_ENDPOINT_DEFAULT"
+
+          CURRENT_USER="$(id -un)"
+          try_connect "service-default" "${CURRENT_USER}@${SVC_ENDPOINT_DEFAULT}"
+
+          echo "Uninstalling service"
+          sudo "$BIN_PATH" service uninstall
+          sleep 3
+
+          if sudo systemctl is-active --quiet iroh-ssh-server.service 2>/dev/null; then
+            echo "ERROR: Service still running after uninstall"
+            exit 1
+          fi
+          echo "Service uninstalled"
+
+          # Clean up default service keys so they don't interfere
+          sudo rm -f /root/.ssh/irohssh_ed25519 /root/.ssh/irohssh_ed25519.pub
+
+          echo "Installing service with relative --key-dir $CUSTOM_KEY_DIR..."
+          mkdir -p "$CUSTOM_KEY_DIR"
+          sudo "$BIN_PATH" service install --ssh-port 22 --key-dir "$CUSTOM_KEY_DIR"
+          sleep 5
+
+          if ! sudo systemctl is-active --quiet iroh-ssh-server.service; then
+            echo "ERROR: Service not running with --key-dir"
+            sudo systemctl status iroh-ssh-server.service || true
+            sudo journalctl -u iroh-ssh-server.service --no-pager -n 30 || true
+            exit 1
+          fi
+          echo "Service is running with --key-dir"
+
+          # Wait for keys to appear
+          for i in {1..15}; do
+            if [ -f "$CUSTOM_KEY_DIR/irohssh_ed25519.pub" ]; then break; fi
+            sleep 1
+          done
+
+          if [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519" ] || [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519.pub" ]; then
+            echo "ERROR: Key files not found in custom key-dir"
+            ls -la "$CUSTOM_KEY_DIR"
+            exit 1
+          fi
+          echo "SUCCESS: Key files present in custom key-dir"
+
+          # Get endpoint from info --key-dir
+          INFO_CUSTOM=$("$BIN_PATH" info --key-dir "$CUSTOM_KEY_DIR" 2>&1 || true)
+          echo "Info (service, --key-dir):"
+          echo "$INFO_CUSTOM"
+
+          SVC_ENDPOINT_CUSTOM=$(echo "$INFO_CUSTOM" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          if [ -z "$SVC_ENDPOINT_CUSTOM" ]; then
+            echo "ERROR: Could not extract service endpoint from info --key-dir"
+            exit 1
+          fi
+          echo "Service endpoint (key-dir): $SVC_ENDPOINT_CUSTOM"
+
+          if [ "$SVC_ENDPOINT_DEFAULT" = "$SVC_ENDPOINT_CUSTOM" ]; then
+            echo "ERROR: Service endpoints should differ between default and custom key-dir"
+            exit 1
+          fi
+          echo "SUCCESS: Service endpoints differ"
+
+          try_connect "service-keydir" "${CURRENT_USER}@${SVC_ENDPOINT_CUSTOM}"
+
+      - name: Run service install test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $BinPath = (Resolve-Path "dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}").Path
+          $CustomKeyDir = "svc-test-keys"
+          $TestKeyDir = Join-Path $env:TEMP ("iroh-svctestkey-" + [System.Guid]::NewGuid().ToString())
+          $TestKey = Join-Path $TestKeyDir "id_ed25519"
+
+          function Invoke-Cleanup {
+            & $BinPath service uninstall 2>$null
+            Start-Sleep -Seconds 3
+            Remove-Item -Path (Join-Path (Get-Location) $CustomKeyDir) -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          try {
+            New-Item -ItemType Directory -Force -Path $CustomKeyDir | Out-Null
+            New-Item -ItemType Directory -Force -Path $TestKeyDir | Out-Null
+
+            & ssh-keygen -q -t ed25519 -N "" -f $TestKey
+            $PublicKey = (Get-Content "$TestKey.pub" -Raw).Trim()
+            $UserSshDir = Join-Path $env:USERPROFILE ".ssh"
+            New-Item -ItemType Directory -Force -Path $UserSshDir | Out-Null
+            $UserAuthorizedKeys = Join-Path $UserSshDir "authorized_keys"
+            Add-Content -Path $UserAuthorizedKeys -Value $PublicKey
+            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "${env:USERNAME}:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+
+            $AdminAuthorizedKeys = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+            if (Test-Path (Split-Path $AdminAuthorizedKeys)) {
+              Add-Content -Path $AdminAuthorizedKeys -Value $PublicKey
+              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+            }
+
+            $BaseArgs = @('-i', $TestKey, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL', '-o', 'BatchMode=yes')
+
+            function Test-ServiceConnect {
+              param([string]$Label, [string]$Target)
+              Write-Host "Connecting to $Label..."
+              $Out = & $BinPath @BaseArgs $Target "cmd /c echo svc-${Label}-ok" 2>&1 | Out-String
+              $Exit = $LASTEXITCODE
+              Write-Host $Out
+
+              if ($Out -match "svc-${Label}-ok") {
+                Write-Host "SUCCESS: Connected to $Label"
+              } elseif ($Out -match "(permission denied|publickey|authentication|Connection closed)" -or $Exit -eq 255) {
+                Write-Host "SUCCESS: Reached SSH auth on $Label"
+              } else {
+                throw "Could not reach $Label"
+              }
+              $global:LASTEXITCODE = 0
+            }
+
+            Write-Host "Installing service without --key-dir"
+            & $BinPath service install --ssh-port 22
+            Start-Sleep -Seconds 10
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if (-not $Svc -or $Svc.Status -ne 'Running') {
+              Write-Host "ERROR: Service not running"
+              if ($Svc) { Write-Host "Service status: $($Svc.Status)" }
+              throw "Service not running after install"
+            }
+            Write-Host "Service is running"
+
+            # Wait for keys to appear
+            $SvcSshDir = "C:\Windows\ServiceProfiles\iroh-ssh\.ssh"
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path (Join-Path $SvcSshDir "irohssh_ed25519.pub")) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            # Get endpoint from info
+            $InfoDefault = & $BinPath info 2>&1 | Out-String
+            Write-Host "Info (service, no key-dir):"
+            Write-Host $InfoDefault
+
+            if ($InfoDefault -match '@([a-f0-9]{64})') {
+              $SvcEndpointDefault = $Matches[1]
+            } else {
+              throw "Could not extract service endpoint from info"
+            }
+            Write-Host "Service endpoint (default): $SvcEndpointDefault"
+
+            $CurrentUser = $env:USERNAME
+            Test-ServiceConnect -Label "service-default" -Target "${CurrentUser}@${SvcEndpointDefault}"
+
+            Write-Host "Uninstalling service"
+            & $BinPath service uninstall
+            Start-Sleep -Seconds 5
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if ($Svc -and $Svc.Status -eq 'Running') {
+              throw "Service still running after uninstall"
+            }
+            Write-Host "Service uninstalled"
+
+            # Clean default service keys
+            Remove-Item -Path (Join-Path $SvcSshDir "irohssh_ed25519") -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path $SvcSshDir "irohssh_ed25519.pub") -Force -ErrorAction SilentlyContinue
+
+            Write-Host "Installing service with relative --key-dir $CustomKeyDir..."
+            New-Item -ItemType Directory -Force -Path $CustomKeyDir | Out-Null
+            & $BinPath service install --ssh-port 22 --key-dir $CustomKeyDir
+            Start-Sleep -Seconds 10
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if (-not $Svc -or $Svc.Status -ne 'Running') {
+              Write-Host "ERROR: Service not running with --key-dir"
+              if ($Svc) { Write-Host "Service status: $($Svc.Status)" }
+              throw "Service not running after install with --key-dir"
+            }
+            Write-Host "Service is running with --key-dir"
+
+            # Wait for keys to appear
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519.pub")) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519")) -or
+                -not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519.pub"))) {
+              throw "Key files not found in custom key-dir $CustomKeyDir"
+            }
+            Write-Host "SUCCESS: Key files present in custom key-dir"
+
+            # Get endpoint from info --key-dir
+            $InfoCustom = & $BinPath info --key-dir $CustomKeyDir 2>&1 | Out-String
+            Write-Host "Info (service, --key-dir):"
+            Write-Host $InfoCustom
+
+            if ($InfoCustom -match '@([a-f0-9]{64})') {
+              $SvcEndpointCustom = $Matches[1]
+            } else {
+              throw "Could not extract service endpoint from info --key-dir"
+            }
+            Write-Host "Service endpoint (key-dir): $SvcEndpointCustom"
+
+            if ($SvcEndpointDefault -eq $SvcEndpointCustom) {
+              throw "Service endpoints should differ between default and custom key-dir"
+            }
+            Write-Host "SUCCESS: Service endpoints differ"
+
+            Test-ServiceConnect -Label "service-keydir" -Target "${CurrentUser}@${SvcEndpointCustom}"
+
+            Write-Host "All service tests passed"
+            $global:LASTEXITCODE = 0
+          }
+          finally {
+            Invoke-Cleanup
+          }
