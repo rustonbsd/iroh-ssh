@@ -5,6 +5,7 @@ use clap::{ArgAction, Args, Parser, Subcommand};
 const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 const RELAY_URL_HELP: &str = "Use only these relay servers, replacing the defaults (repeatable)";
 const EXTRA_RELAY_URL_HELP: &str = "Add relay servers alongside the defaults (repeatable)";
+const KEY_DIR_HELP: &str = "Directory for iroh-ssh identity keys (default: ~/.ssh)";
 
 #[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
@@ -28,7 +29,7 @@ pub struct Cli {
     pub remote_cmd: Option<Vec<OsString>>,
 }
 
-#[derive(Subcommand,Debug)]
+#[derive(Subcommand, Debug)]
 pub enum Cmd {
     Connect(ConnectArgs),
     #[command(hide = true)]
@@ -38,7 +39,7 @@ pub enum Cmd {
         #[command(subcommand)]
         op: ServiceCmd,
     },
-    Info,
+    Info(InfoArgs),
     #[command(hide = true)]
     Proxy(ProxyArgs),
     #[command(hide = true)]
@@ -161,6 +162,9 @@ pub struct ServerArgs {
     #[arg(short, long, default_value_t = false)]
     pub persist: bool,
 
+    #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
+    pub key_dir: Option<PathBuf>,
+
     #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
     pub relay_url: Vec<String>,
 
@@ -168,11 +172,20 @@ pub struct ServerArgs {
     pub extra_relay_url: Vec<String>,
 }
 
+#[derive(Args, Clone, Debug)]
+pub struct InfoArgs {
+    #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
+    pub key_dir: Option<PathBuf>,
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum ServiceCmd {
     Install {
         #[arg(long, default_value = "22")]
         ssh_port: u16,
+
+        #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
+        key_dir: Option<PathBuf>,
 
         #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
         relay_url: Vec<String>,
@@ -187,6 +200,9 @@ pub enum ServiceCmd {
 pub struct ServiceArgs {
     #[arg(long, default_value = "22")]
     pub ssh_port: u16,
+
+    #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
+    pub key_dir: Option<PathBuf>,
 
     #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
     pub relay_url: Vec<String>,

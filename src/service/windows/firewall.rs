@@ -118,7 +118,7 @@ Write-Host 'Removed HTTPS rule'
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Don't fail on cleanup - just log the error
+        // Don't fail on cleanup (just log the error)
         tracing::warn!(
             "Failed to remove some firewall rules (may not exist).\nStdout: {}\nStderr: {}",
             stdout,

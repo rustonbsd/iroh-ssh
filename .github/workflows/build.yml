@@ -199,23 +199,13 @@ jobs:
           fi
           set -e
           
-          if grep -qiE "(permission denied|password|publickey|authentication failed|Connection closed)" connect_output.txt; then
-            echo "SUCCESS: Connection reached SSH authentication stage"
+          if grep -q "Permanently added" connect_output.txt; then
+            echo "SUCCESS: Connection reached SSH host (host key exchanged)"
             kill $SERVER_PID || true
             exit 0
-          elif grep -qiE "(connection refused|network|timeout|no route)" connect_output.txt; then
+          else
             echo "FAILURE: Could not establish connection"
             cat connect_output.txt
-            kill $SERVER_PID || true
-            exit 1
-          else
-            echo "Test completed - checking if connection was attempted"
-            cat connect_output.txt
-            if [ $EXIT_CODE -eq 255 ]; then
-              echo "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
-              kill $SERVER_PID || true
-              exit 0
-            fi
             kill $SERVER_PID || true
             exit 1
           fi
@@ -474,26 +464,14 @@ jobs:
           Write-Host "Connect output:"
           Write-Host $ConnectOutput
           
-          if ($ConnectOutput -match "(permission denied|password|publickey|authentication|Connection closed)") {
-            Write-Host "SUCCESS: Connection reached SSH authentication stage"
-            Stop-Job -Job $ServerJob
-            Remove-Job -Job $ServerJob
-            exit 0
-          }
-          elseif ($ConnectOutput -match "(connection refused|network|timeout|no route)") {
-            Write-Host "FAILURE: Could not establish connection"
-            Stop-Job -Job $ServerJob
-            Remove-Job -Job $ServerJob
-            exit 1
-          }
-          elseif ($ExitCode -eq 255) {
-            Write-Host "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
+          if ($ConnectOutput -match "Permanently added") {
+            Write-Host "SUCCESS: Connection reached SSH host (host key exchanged)"
             Stop-Job -Job $ServerJob
             Remove-Job -Job $ServerJob
             exit 0
           }
           else {
-            Write-Host "Test result unclear"
+            Write-Host "FAILURE: Could not establish connection"
             Stop-Job -Job $ServerJob
             Remove-Job -Job $ServerJob
             exit 1
@@ -663,4 +641,614 @@ jobs:
               Remove-Job -Job $ServerJob -Force -ErrorAction SilentlyContinue
             }
             Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Run key-dir test (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+
+          BIN_PATH="dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          CUSTOM_KEY_DIR="$(mktemp -d)"
+          TEST_KEY_DIR="$(mktemp -d)"
+          TEST_KEY="$TEST_KEY_DIR/id_ed25519"
+
+          cleanup() {
+            kill "$SERVER_DEFAULT_PID" 2>/dev/null || true
+            kill "$SERVER_CUSTOM_PID" 2>/dev/null || true
+            wait "$SERVER_DEFAULT_PID" 2>/dev/null || true
+            wait "$SERVER_CUSTOM_PID" 2>/dev/null || true
+            rm -rf "$CUSTOM_KEY_DIR" "$TEST_KEY_DIR"
+          }
+          trap cleanup EXIT
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keygen -q -t ed25519 -N "" -f "$TEST_KEY"
+          cat "$TEST_KEY.pub" >> "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
+
+          # Start server A: default key-dir (~/.ssh)
+          echo "Starting server with default key-dir..."
+          "$BIN_PATH" server --persist > server_default_output.txt 2>&1 &
+          SERVER_DEFAULT_PID=$!
+
+          for i in {1..30}; do
+            if grep -q 'iroh-ssh.*@[a-f0-9]' server_default_output.txt 2>/dev/null; then break; fi
+            if ! kill -0 "$SERVER_DEFAULT_PID" 2>/dev/null; then
+              echo "ERROR: Default server died"; cat server_default_output.txt; exit 1
+            fi
+            sleep 1
+          done
+
+          DEFAULT_CONN=$(grep 'iroh-ssh' server_default_output.txt | grep -v 'client ->' | awk '{print $2}' | head -1)
+          DEFAULT_ENDPOINT="${DEFAULT_CONN#*@}"
+          echo "Default server endpoint: $DEFAULT_ENDPOINT"
+
+          # Start server B: custom key-dir
+          echo "Starting server with --key-dir $CUSTOM_KEY_DIR..."
+          "$BIN_PATH" server --persist --key-dir "$CUSTOM_KEY_DIR" > server_custom_output.txt 2>&1 &
+          SERVER_CUSTOM_PID=$!
+
+          for i in {1..30}; do
+            if grep -q 'iroh-ssh.*@[a-f0-9]' server_custom_output.txt 2>/dev/null; then break; fi
+            if ! kill -0 "$SERVER_CUSTOM_PID" 2>/dev/null; then
+              echo "ERROR: Custom key-dir server died"; cat server_custom_output.txt; exit 1
+            fi
+            sleep 1
+          done
+
+          CUSTOM_CONN=$(grep 'iroh-ssh' server_custom_output.txt | grep -v 'client ->' | awk '{print $2}' | head -1)
+          CUSTOM_ENDPOINT="${CUSTOM_CONN#*@}"
+          echo "Custom key-dir server endpoint: $CUSTOM_ENDPOINT"
+
+          # Endpoints must differ
+          if [ "$DEFAULT_ENDPOINT" = "$CUSTOM_ENDPOINT" ]; then
+            echo "ERROR: Both servers have the same endpoint, key-dir was not respected"
+            exit 1
+          fi
+          echo "SUCCESS: Endpoints differ as expected"
+
+          # Verify key files exist in custom dir
+          if [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519" ] || [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519.pub" ]; then
+            echo "ERROR: Key files not found in custom key-dir $CUSTOM_KEY_DIR"
+            ls -la "$CUSTOM_KEY_DIR"
+            exit 1
+          fi
+          echo "SUCCESS: Key files present in custom key-dir"
+
+          # Info with default key-dir should show default endpoint
+          INFO_DEFAULT=$("$BIN_PATH" info 2>&1 || true)
+          echo "Info (default):"
+          echo "$INFO_DEFAULT"
+          if ! echo "$INFO_DEFAULT" | grep -q "$DEFAULT_ENDPOINT"; then
+            echo "ERROR: info output does not contain default endpoint"
+            exit 1
+          fi
+          echo "SUCCESS: info shows default endpoint"
+
+          # Info with custom key-dir should show custom endpoint
+          INFO_CUSTOM=$("$BIN_PATH" info --key-dir "$CUSTOM_KEY_DIR" 2>&1 || true)
+          echo "Info (custom key-dir):"
+          echo "$INFO_CUSTOM"
+          if ! echo "$INFO_CUSTOM" | grep -q "$CUSTOM_ENDPOINT"; then
+            echo "ERROR: info --key-dir output does not contain custom endpoint"
+            exit 1
+          fi
+          echo "SUCCESS: info --key-dir shows custom endpoint"
+
+          # Connect test: default server
+          COMMON_SSH_ARGS=(-i "$TEST_KEY" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes")
+
+          run_connect() {
+            local label="$1" target="$2"
+            echo "Connecting to ${label}..."
+            set +e
+            if command -v timeout > /dev/null; then
+              CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo keydir-${label}-ok" 2>&1)
+              CONNECT_EXIT=$?
+            else
+              "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo keydir-${label}-ok" > connect_${label}.txt 2>&1 &
+              local cpid=$!
+              ( sleep 30; kill "$cpid" 2>/dev/null ) &
+              local wpid=$!
+              wait "$cpid"
+              CONNECT_EXIT=$?
+              kill "$wpid" 2>/dev/null || true
+              wait "$wpid" 2>/dev/null || true
+              CONNECT_OUT=$(cat connect_${label}.txt)
+            fi
+            set -e
+            echo "$CONNECT_OUT"
+
+            if echo "$CONNECT_OUT" | grep -q "keydir-${label}-ok"; then
+              echo "SUCCESS: Connected to ${label}"
+            elif echo "$CONNECT_OUT" | grep -q "Permanently added"; then
+              echo "SUCCESS: Reached SSH host on ${label} (host key exchanged)"
+            else
+              echo "ERROR: Could not reach ${label}"
+              exit 1
+            fi
+          }
+
+          run_connect "default-server" "$DEFAULT_CONN"
+          run_connect "custom-keydir-server" "$CUSTOM_CONN"
+
+      - name: Run key-dir test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $BinPath = (Resolve-Path "dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}").Path
+          $CustomKeyDir = Join-Path $env:TEMP ("iroh-keydir-" + [System.Guid]::NewGuid().ToString())
+          $TestKeyDir = Join-Path $env:TEMP ("iroh-testkey-" + [System.Guid]::NewGuid().ToString())
+          $TestKey = Join-Path $TestKeyDir "id_ed25519"
+          $ServerDefaultJob = $null
+          $ServerCustomJob = $null
+
+          try {
+            New-Item -ItemType Directory -Force -Path $CustomKeyDir | Out-Null
+            New-Item -ItemType Directory -Force -Path $TestKeyDir | Out-Null
+
+            & ssh-keygen -q -t ed25519 -N "" -f $TestKey
+            $PublicKey = (Get-Content "$TestKey.pub" -Raw).Trim()
+            $UserSshDir = Join-Path $env:USERPROFILE ".ssh"
+            New-Item -ItemType Directory -Force -Path $UserSshDir | Out-Null
+            $UserAuthorizedKeys = Join-Path $UserSshDir "authorized_keys"
+            Add-Content -Path $UserAuthorizedKeys -Value $PublicKey
+            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "${env:USERNAME}:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+
+            $CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $CurrentPrincipal = [Security.Principal.WindowsPrincipal]::new($CurrentIdentity)
+            if ($CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+              $AdminAuthorizedKeys = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+              Add-Content -Path $AdminAuthorizedKeys -Value $PublicKey
+              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+            }
+
+            # Start server A: default key-dir
+            Write-Host "Starting server with default key-dir..."
+            $ServerDefaultJob = Start-Job -ScriptBlock {
+              param($Path)
+              & $Path server --persist
+            } -ArgumentList $BinPath
+
+            $DefaultConn = $null
+            for ($i = 0; $i -lt 30; $i++) {
+              $Out = (Receive-Job -Job $ServerDefaultJob -Keep 2>$null | Out-String)
+              if ($Out -match 'iroh-ssh ([^@]+@[a-f0-9]{64})') {
+                $DefaultConn = $Matches[1]
+                break
+              }
+              if ($ServerDefaultJob.State -in @('Completed', 'Failed', 'Stopped')) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $DefaultConn) {
+              throw "Could not extract default server connection string"
+            }
+
+            $DefaultEndpoint = $DefaultConn.Split('@')[1]
+            Write-Host "Default server endpoint: $DefaultEndpoint"
+
+            # Start server B: custom key-dir
+            Write-Host "Starting server with --key-dir $CustomKeyDir..."
+            $ServerCustomJob = Start-Job -ScriptBlock {
+              param($Path, $Dir)
+              & $Path server --persist --key-dir $Dir
+            } -ArgumentList $BinPath, $CustomKeyDir
+
+            $CustomConn = $null
+            for ($i = 0; $i -lt 30; $i++) {
+              $Out = (Receive-Job -Job $ServerCustomJob -Keep 2>$null | Out-String)
+              if ($Out -match 'iroh-ssh ([^@]+@[a-f0-9]{64})') {
+                $CustomConn = $Matches[1]
+                break
+              }
+              if ($ServerCustomJob.State -in @('Completed', 'Failed', 'Stopped')) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $CustomConn) {
+              throw "Could not extract custom key-dir server connection string"
+            }
+
+            $CustomEndpoint = $CustomConn.Split('@')[1]
+            Write-Host "Custom key-dir server endpoint: $CustomEndpoint"
+
+            # Endpoints must differ
+            if ($DefaultEndpoint -eq $CustomEndpoint) {
+              throw "Both servers have the same endpoint, key-dir was not respected"
+            }
+            Write-Host "SUCCESS: Endpoints differ as expected"
+
+            # Verify key files in custom dir
+            if (-not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519")) -or
+                -not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519.pub"))) {
+              throw "Key files not found in custom key-dir $CustomKeyDir"
+            }
+            Write-Host "SUCCESS: Key files present in custom key-dir"
+
+            # Info with default key-dir
+            $InfoDefault = & $BinPath info 2>&1 | Out-String
+            Write-Host "Info (default):"
+            Write-Host $InfoDefault
+            if ($InfoDefault -notmatch [regex]::Escape($DefaultEndpoint)) {
+              throw "info output does not contain default endpoint"
+            }
+            Write-Host "SUCCESS: info shows default endpoint"
+
+            # Info with custom key-dir
+            $InfoCustom = & $BinPath info --key-dir $CustomKeyDir 2>&1 | Out-String
+            Write-Host "Info (custom key-dir):"
+            Write-Host $InfoCustom
+            if ($InfoCustom -notmatch [regex]::Escape($CustomEndpoint)) {
+              throw "info --key-dir output does not contain custom endpoint"
+            }
+            Write-Host "SUCCESS: info --key-dir shows custom endpoint"
+
+            # Connect test: default server
+            $BaseArgs = @('-i', $TestKey, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL', '-o', 'BatchMode=yes')
+
+            Write-Host "Connecting to default server..."
+            $ConnectOut = & $BinPath @BaseArgs $DefaultConn "cmd /c echo keydir-default-ok" 2>&1 | Out-String
+            $ConnExit = $LASTEXITCODE
+            Write-Host $ConnectOut
+
+            if ($ConnectOut -match "keydir-default-ok") {
+              Write-Host "SUCCESS: Connected to default server"
+            } elseif ($ConnectOut -match "Permanently added") {
+              Write-Host "SUCCESS: Reached SSH host on default server (host key exchanged)"
+            } else {
+              throw "Could not reach default server"
+            }
+
+            # Connect test: custom key-dir server
+            Write-Host "Connecting to custom key-dir server..."
+            $ConnectOut = & $BinPath @BaseArgs $CustomConn "cmd /c echo keydir-custom-ok" 2>&1 | Out-String
+            $ConnExit = $LASTEXITCODE
+            Write-Host $ConnectOut
+
+            if ($ConnectOut -match "keydir-custom-ok") {
+              Write-Host "SUCCESS: Connected to custom key-dir server"
+            } elseif ($ConnectOut -match "Permanently added") {
+              Write-Host "SUCCESS: Reached SSH host on custom key-dir server (host key exchanged)"
+            } else {
+              throw "Could not reach custom key-dir server"
+            }
+
+            $global:LASTEXITCODE = 0
+          }
+          finally {
+            if ($ServerDefaultJob) {
+              Stop-Job -Job $ServerDefaultJob -ErrorAction SilentlyContinue
+              Remove-Job -Job $ServerDefaultJob -Force -ErrorAction SilentlyContinue
+            }
+            if ($ServerCustomJob) {
+              Stop-Job -Job $ServerCustomJob -ErrorAction SilentlyContinue
+              Remove-Job -Job $ServerCustomJob -Force -ErrorAction SilentlyContinue
+            }
+            Remove-Item -Path $CustomKeyDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Run service install test (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+
+          BIN_PATH="$(pwd)/dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}"
+          CUSTOM_KEY_DIR="svc-test-keys"
+          TEST_KEY_DIR="$(mktemp -d)"
+          TEST_KEY="$TEST_KEY_DIR/id_ed25519"
+
+          cleanup() {
+            sudo "$BIN_PATH" service uninstall 2>/dev/null || true
+            sleep 2
+            sudo rm -f /etc/systemd/system/iroh-ssh-server.service
+            sudo rm -f /usr/local/bin/iroh-ssh
+            sudo systemctl daemon-reload 2>/dev/null || true
+            rm -rf "$(pwd)/$CUSTOM_KEY_DIR" "$TEST_KEY_DIR"
+          }
+          trap cleanup EXIT
+
+          # Prepare SSH key for connect tests
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          ssh-keygen -q -t ed25519 -N "" -f "$TEST_KEY"
+          cat "$TEST_KEY.pub" >> "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
+          # Service runs as root, so authorize for root too
+          sudo mkdir -p /root/.ssh
+          sudo chmod 700 /root/.ssh
+          cat "$TEST_KEY.pub" | sudo tee -a /root/.ssh/authorized_keys > /dev/null
+          sudo chmod 600 /root/.ssh/authorized_keys
+
+          COMMON_SSH_ARGS=(-i "$TEST_KEY" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" -o "BatchMode=yes")
+
+          try_connect() {
+            local label="$1" target="$2"
+            echo "Connecting to ${label}..."
+            set +e
+            CONNECT_OUT=$(timeout 30s "$BIN_PATH" "${COMMON_SSH_ARGS[@]}" "$target" "echo svc-${label}-ok" 2>&1)
+            CONNECT_EXIT=$?
+            set -e
+            echo "$CONNECT_OUT"
+
+            if echo "$CONNECT_OUT" | grep -q "svc-${label}-ok"; then
+              echo "SUCCESS: Connected to ${label}"
+            elif echo "$CONNECT_OUT" | grep -q "Permanently added"; then
+              echo "SUCCESS: Reached SSH host on ${label} (host key exchanged)"
+            else
+              echo "ERROR: Could not reach ${label}"
+              return 1
+            fi
+          }
+
+          echo "Installing service without --key-dir..."
+          sudo "$BIN_PATH" service install --ssh-port 22
+          sleep 5
+
+          if ! sudo systemctl is-active --quiet iroh-ssh-server.service; then
+            echo "ERROR: Service not running"
+            sudo systemctl status iroh-ssh-server.service || true
+            sudo journalctl -u iroh-ssh-server.service --no-pager -n 30 || true
+            exit 1
+          fi
+          echo "Service is running"
+
+          # Wait for keys to appear (service creates them on startup)
+          for i in {1..15}; do
+            if sudo test -f /root/.ssh/irohssh_ed25519.pub; then break; fi
+            sleep 1
+          done
+
+          # Get endpoint from info (run as root to see /root/.ssh keys)
+          INFO_DEFAULT=$(sudo "$BIN_PATH" info 2>&1 || true)
+          echo "Info (service, no key-dir):"
+          echo "$INFO_DEFAULT"
+
+          SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -A1 'service iroh-ssh endpoint' | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          if [ -z "$SVC_ENDPOINT_DEFAULT" ]; then
+            # Fall back to first endpoint if no service-specific one found
+            SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          fi
+          if [ -z "$SVC_ENDPOINT_DEFAULT" ]; then
+            echo "ERROR: Could not extract service endpoint from info"
+            exit 1
+          fi
+          echo "Service endpoint (default): $SVC_ENDPOINT_DEFAULT"
+
+          CURRENT_USER="$(id -un)"
+          try_connect "service-default" "${CURRENT_USER}@${SVC_ENDPOINT_DEFAULT}"
+
+          echo "Uninstalling service"
+          sudo "$BIN_PATH" service uninstall
+          sleep 3
+
+          if sudo systemctl is-active --quiet iroh-ssh-server.service 2>/dev/null; then
+            echo "ERROR: Service still running after uninstall"
+            exit 1
+          fi
+          echo "Service uninstalled"
+
+          # Clean up default service keys so they don't interfere
+          sudo rm -f /root/.ssh/irohssh_ed25519 /root/.ssh/irohssh_ed25519.pub
+
+          echo "Installing service with relative --key-dir $CUSTOM_KEY_DIR..."
+          mkdir -p "$CUSTOM_KEY_DIR"
+          sudo "$BIN_PATH" service install --ssh-port 22 --key-dir "$CUSTOM_KEY_DIR"
+          sleep 5
+
+          if ! sudo systemctl is-active --quiet iroh-ssh-server.service; then
+            echo "ERROR: Service not running with --key-dir"
+            sudo systemctl status iroh-ssh-server.service || true
+            sudo journalctl -u iroh-ssh-server.service --no-pager -n 30 || true
+            exit 1
+          fi
+          echo "Service is running with --key-dir"
+
+          # Wait for keys to appear
+          for i in {1..15}; do
+            if [ -f "$CUSTOM_KEY_DIR/irohssh_ed25519.pub" ]; then break; fi
+            sleep 1
+          done
+
+          if [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519" ] || [ ! -f "$CUSTOM_KEY_DIR/irohssh_ed25519.pub" ]; then
+            echo "ERROR: Key files not found in custom key-dir"
+            ls -la "$CUSTOM_KEY_DIR"
+            exit 1
+          fi
+          echo "SUCCESS: Key files present in custom key-dir"
+
+          # Get endpoint from info --key-dir
+          INFO_CUSTOM=$("$BIN_PATH" info --key-dir "$CUSTOM_KEY_DIR" 2>&1 || true)
+          echo "Info (service, --key-dir):"
+          echo "$INFO_CUSTOM"
+
+          SVC_ENDPOINT_CUSTOM=$(echo "$INFO_CUSTOM" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          if [ -z "$SVC_ENDPOINT_CUSTOM" ]; then
+            echo "ERROR: Could not extract service endpoint from info --key-dir"
+            exit 1
+          fi
+          echo "Service endpoint (key-dir): $SVC_ENDPOINT_CUSTOM"
+
+          if [ "$SVC_ENDPOINT_DEFAULT" = "$SVC_ENDPOINT_CUSTOM" ]; then
+            echo "ERROR: Service endpoints should differ between default and custom key-dir"
+            exit 1
+          fi
+          echo "SUCCESS: Service endpoints differ"
+
+          try_connect "service-keydir" "${CURRENT_USER}@${SVC_ENDPOINT_CUSTOM}"
+
+      - name: Run service install test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $BinPath = (Resolve-Path "dist/${{ matrix.platform.target }}/iroh-ssh${{ matrix.platform.ext }}").Path
+          $CustomKeyDir = "svc-test-keys"
+          $TestKeyDir = Join-Path $env:TEMP ("iroh-svctestkey-" + [System.Guid]::NewGuid().ToString())
+          $TestKey = Join-Path $TestKeyDir "id_ed25519"
+
+          function Invoke-Cleanup {
+            & $BinPath service uninstall 2>$null
+            Start-Sleep -Seconds 3
+            Remove-Item -Path (Join-Path (Get-Location) $CustomKeyDir) -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $TestKeyDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+          try {
+            New-Item -ItemType Directory -Force -Path $CustomKeyDir | Out-Null
+            New-Item -ItemType Directory -Force -Path $TestKeyDir | Out-Null
+
+            & ssh-keygen -q -t ed25519 -N "" -f $TestKey
+            $PublicKey = (Get-Content "$TestKey.pub" -Raw).Trim()
+            $UserSshDir = Join-Path $env:USERPROFILE ".ssh"
+            New-Item -ItemType Directory -Force -Path $UserSshDir | Out-Null
+            $UserAuthorizedKeys = Join-Path $UserSshDir "authorized_keys"
+            Add-Content -Path $UserAuthorizedKeys -Value $PublicKey
+            & icacls $UserAuthorizedKeys /inheritance:r /grant:r "${env:USERNAME}:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+
+            $AdminAuthorizedKeys = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+            if (Test-Path (Split-Path $AdminAuthorizedKeys)) {
+              Add-Content -Path $AdminAuthorizedKeys -Value $PublicKey
+              & icacls $AdminAuthorizedKeys /inheritance:r /grant:r "Administrators:(F)" /grant:r "SYSTEM:(F)" | Out-Null
+            }
+
+            $BaseArgs = @('-i', $TestKey, '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=NUL', '-o', 'BatchMode=yes')
+
+            function Test-ServiceConnect {
+              param([string]$Label, [string]$Target)
+              Write-Host "Connecting to $Label..."
+              $Out = & $BinPath @BaseArgs $Target "cmd /c echo svc-${Label}-ok" 2>&1 | Out-String
+              $Exit = $LASTEXITCODE
+              Write-Host $Out
+
+              if ($Out -match "svc-${Label}-ok") {
+                Write-Host "SUCCESS: Connected to $Label"
+              } elseif ($Out -match "Permanently added") {
+                Write-Host "SUCCESS: Reached SSH host on $Label (host key exchanged)"
+              } else {
+                throw "Could not reach $Label"
+              }
+              $global:LASTEXITCODE = 0
+            }
+
+            Write-Host "Installing service without --key-dir"
+            & $BinPath service install --ssh-port 22
+            Start-Sleep -Seconds 10
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if (-not $Svc -or $Svc.Status -ne 'Running') {
+              Write-Host "ERROR: Service not running"
+              if ($Svc) { Write-Host "Service status: $($Svc.Status)" }
+              throw "Service not running after install"
+            }
+            Write-Host "Service is running"
+
+            # Wait for keys to appear
+            $SvcSshDir = "C:\Windows\ServiceProfiles\iroh-ssh\.ssh"
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path (Join-Path $SvcSshDir "irohssh_ed25519.pub")) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            # Get endpoint from info
+            $InfoDefault = & $BinPath info 2>&1 | Out-String
+            Write-Host "Info (service, no key-dir):"
+            Write-Host $InfoDefault
+
+            $SvcEndpointDefault = $null
+            $Lines = $InfoDefault -split "`n"
+            for ($i = 0; $i -lt $Lines.Count; $i++) {
+              if ($Lines[$i] -match 'service iroh-ssh endpoint' -and ($i + 1) -lt $Lines.Count) {
+                if ($Lines[$i + 1] -match '@([a-f0-9]{64})') {
+                  $SvcEndpointDefault = $Matches[1]
+                  break
+                }
+              }
+            }
+            if (-not $SvcEndpointDefault -and $InfoDefault -match '@([a-f0-9]{64})') {
+              $SvcEndpointDefault = $Matches[1]
+            }
+            if (-not $SvcEndpointDefault) {
+              throw "Could not extract service endpoint from info"
+            }
+            Write-Host "Service endpoint (default): $SvcEndpointDefault"
+
+            $CurrentUser = $env:USERNAME
+            Test-ServiceConnect -Label "service-default" -Target "${CurrentUser}@${SvcEndpointDefault}"
+
+            Write-Host "Uninstalling service"
+            & $BinPath service uninstall
+            Start-Sleep -Seconds 5
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if ($Svc -and $Svc.Status -eq 'Running') {
+              throw "Service still running after uninstall"
+            }
+            Write-Host "Service uninstalled"
+
+            # Clean default service keys
+            Remove-Item -Path (Join-Path $SvcSshDir "irohssh_ed25519") -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path $SvcSshDir "irohssh_ed25519.pub") -Force -ErrorAction SilentlyContinue
+
+            Write-Host "Installing service with relative --key-dir $CustomKeyDir..."
+            New-Item -ItemType Directory -Force -Path $CustomKeyDir | Out-Null
+            & $BinPath service install --ssh-port 22 --key-dir $CustomKeyDir
+            Start-Sleep -Seconds 10
+
+            $Svc = Get-Service -Name "iroh-ssh" -ErrorAction SilentlyContinue
+            if (-not $Svc -or $Svc.Status -ne 'Running') {
+              Write-Host "ERROR: Service not running with --key-dir"
+              if ($Svc) { Write-Host "Service status: $($Svc.Status)" }
+              throw "Service not running after install with --key-dir"
+            }
+            Write-Host "Service is running with --key-dir"
+
+            # Wait for keys to appear
+            for ($i = 0; $i -lt 15; $i++) {
+              if (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519.pub")) { break }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519")) -or
+                -not (Test-Path (Join-Path $CustomKeyDir "irohssh_ed25519.pub"))) {
+              throw "Key files not found in custom key-dir $CustomKeyDir"
+            }
+            Write-Host "SUCCESS: Key files present in custom key-dir"
+
+            # Get endpoint from info --key-dir
+            $InfoCustom = & $BinPath info --key-dir $CustomKeyDir 2>&1 | Out-String
+            Write-Host "Info (service, --key-dir):"
+            Write-Host $InfoCustom
+
+            if ($InfoCustom -match '@([a-f0-9]{64})') {
+              $SvcEndpointCustom = $Matches[1]
+            } else {
+              throw "Could not extract service endpoint from info --key-dir"
+            }
+            Write-Host "Service endpoint (key-dir): $SvcEndpointCustom"
+
+            if ($SvcEndpointDefault -eq $SvcEndpointCustom) {
+              throw "Service endpoints should differ between default and custom key-dir"
+            }
+            Write-Host "SUCCESS: Service endpoints differ"
+
+            Test-ServiceConnect -Label "service-keydir" -Target "${CurrentUser}@${SvcEndpointCustom}"
+
+            Write-Host "All service tests passed"
+            $global:LASTEXITCODE = 0
+          }
+          finally {
+            Invoke-Cleanup
           }

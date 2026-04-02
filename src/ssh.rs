@@ -1,5 +1,5 @@
 use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
-use std::{ffi::OsString, process::Stdio};
+use std::{ffi::OsString, path::Path, process::Stdio};
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
@@ -21,6 +21,7 @@ impl Builder {
             secret_key: SecretKey::generate(&mut rand::rng()).to_bytes(),
             accept_incoming: false,
             accept_port: None,
+            key_dir: None,
             relay_urls: Vec::new(),
             extra_relay_urls: Vec::new(),
         }
@@ -51,6 +52,11 @@ impl Builder {
         self
     }
 
+    pub fn key_dir(mut self, key_dir: Option<std::path::PathBuf>) -> Self {
+        self.key_dir = key_dir;
+        self
+    }
+
     pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
         tracing::info!(
             "dot_ssh_integration: persist={}, service={}",
@@ -58,7 +64,12 @@ impl Builder {
             service
         );
 
-        match dot_ssh(&SecretKey::from_bytes(&self.secret_key), persist, service) {
+        match dot_ssh(
+            &SecretKey::from_bytes(&self.secret_key),
+            persist,
+            service,
+            self.key_dir.as_deref(),
+        ) {
             Ok(secret_key) => {
                 tracing::info!("dot_ssh_integration: Successfully loaded/created SSH keys");
                 self.secret_key = secret_key.to_bytes();
@@ -293,34 +304,43 @@ pub fn dot_ssh(
     default_secret_key: &SecretKey,
     persist: bool,
     _service: bool,
+    key_dir: Option<&Path>,
 ) -> anyhow::Result<SecretKey> {
     tracing::info!(
-        "dot_ssh: Function called, persist={}, service={}",
+        "dot_ssh: Function called, persist={}, service={}, key_dir={:?}",
         persist,
-        _service
+        _service,
+        key_dir,
     );
 
-    let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     #[allow(unused_mut)]
-    let mut ssh_dir = distro_home.join(".ssh");
+    let mut ssh_dir = if let Some(dir) = key_dir {
+        dir.to_path_buf()
+    } else {
+        let distro_home = my_home()?.ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+        distro_home.join(".ssh")
+    };
 
-    // For now linux services are installed as "sudo'er" so
-    // we need to use the root .ssh directory
-    #[cfg(target_os = "linux")]
-    if _service {
-        ssh_dir = std::path::PathBuf::from("/root/.ssh");
-    }
+    // Only apply service-specific overrides when no explicit key_dir is set
+    if key_dir.is_none() {
+        // For now linux services are installed as "sudo'er" so
+        // we need to use the root .ssh directory
+        #[cfg(target_os = "linux")]
+        if _service {
+            ssh_dir = std::path::PathBuf::from("/root/.ssh");
+        }
 
-    // Windows virtual service account profile location for NT SERVICE\iroh-ssh
-    #[cfg(target_os = "windows")]
-    if _service {
-        ssh_dir = std::path::PathBuf::from(crate::service::WindowsService::SERVICE_SSH_DIR);
-        tracing::info!("dot_ssh: Using service SSH dir: {}", ssh_dir.display());
+        // Windows virtual service account profile location for NT SERVICE\iroh-ssh
+        #[cfg(target_os = "windows")]
+        if _service {
+            ssh_dir = std::path::PathBuf::from(crate::service::WindowsService::SERVICE_SSH_DIR);
+            tracing::info!("dot_ssh: Using service SSH dir: {}", ssh_dir.display());
 
-        // Ensure directory exists when running as service
-        if !ssh_dir.exists() {
-            tracing::info!("dot_ssh: Service SSH dir doesn't exist, creating it");
-            std::fs::create_dir_all(&ssh_dir)?;
+            // Ensure directory exists when running as service
+            if !ssh_dir.exists() {
+                tracing::info!("dot_ssh: Service SSH dir doesn't exist, creating it");
+                std::fs::create_dir_all(&ssh_dir)?;
+            }
         }
     }
 
@@ -338,15 +358,15 @@ pub fn dot_ssh(
                 ssh_dir.display()
             );
             bail!(
-                "no .ssh folder found in {}, use --persist flag to create it",
-                distro_home.display()
+                "key directory {} does not exist, use --persist flag to create it",
+                ssh_dir.display()
             )
         }
         (false, true) => {
             tracing::info!("dot_ssh: Creating ssh_dir: {}", ssh_dir.display());
             std::fs::create_dir_all(&ssh_dir)?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
-            dot_ssh(default_secret_key, persist, _service)
+            dot_ssh(default_secret_key, persist, _service, key_dir)
         }
         (true, true) => {
             tracing::info!("dot_ssh: Branch (true, true) - directory exists, persist enabled");

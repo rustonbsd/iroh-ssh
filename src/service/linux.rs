@@ -44,12 +44,15 @@ impl LinuxService {
     fn init_install_script(service_params: ServiceParams) -> anyhow::Result<std::path::PathBuf> {
         use std::io::Write as _;
 
-        let mut relay_args = String::new();
+        let mut server_args = String::new();
+        if let Some(ref dir) = service_params.key_dir {
+            server_args.push_str(&format!(" --key-dir {}", dir.display()));
+        }
         for url in &service_params.relay_url {
-            relay_args.push_str(&format!(" --relay-url {url}"));
+            server_args.push_str(&format!(" --relay-url {url}"));
         }
         for url in &service_params.extra_relay_url {
-            relay_args.push_str(&format!(" --extra-relay-url {url}"));
+            server_args.push_str(&format!(" --extra-relay-url {url}"));
         }
 
         let mut temp_sh = tempfile::Builder::new()
@@ -59,7 +62,7 @@ impl LinuxService {
         temp_sh.write_all(
             LinuxService::INSTALL_SH_BYTES
                 .replace("[SSHPORT]", &service_params.ssh_port.to_string())
-                .replace("[RELAYARGS]", &relay_args)
+                .replace("[SERVERARGS]", &server_args)
                 .replace(
                     "[BINARYPATH]",
                     std::env::current_exe()?

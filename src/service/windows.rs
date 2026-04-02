@@ -62,6 +62,9 @@ static SERVICE_RELAY_URLS: OnceLock<Vec<String>> = OnceLock::new();
 static SERVICE_EXTRA_RELAY_URLS: OnceLock<Vec<String>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
+static SERVICE_KEY_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
 impl Service for WindowsService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         task::spawn_blocking(move || WindowsService::install_blocking(service_params))
@@ -104,6 +107,7 @@ impl WindowsService {
             })
             .ok_or_else(|| anyhow!("service port already initialized with different value"))?;
 
+        let _ = SERVICE_KEY_DIR.set(service_params.key_dir);
         let _ = SERVICE_RELAY_URLS.set(service_params.relay_url);
         let _ = SERVICE_EXTRA_RELAY_URLS.set(service_params.extra_relay_url);
 
@@ -124,6 +128,10 @@ impl WindowsService {
 
     fn service_extra_relay_urls() -> Vec<String> {
         SERVICE_EXTRA_RELAY_URLS.get().cloned().unwrap_or_default()
+    }
+
+    fn service_key_dir() -> Option<PathBuf> {
+        SERVICE_KEY_DIR.get().cloned().flatten()
     }
 
     pub const SERVICE_NAME: &'static str = "iroh-ssh";
@@ -228,6 +236,10 @@ impl WindowsService {
                     OsString::from("--ssh-port"),
                     OsString::from(service_params.ssh_port.to_string()),
                 ];
+                if let Some(ref dir) = service_params.key_dir {
+                    args.push(OsString::from("--key-dir"));
+                    args.push(OsString::from(dir));
+                }
                 for url in &service_params.relay_url {
                     args.push(OsString::from("--relay-url"));
                     args.push(OsString::from(url));
@@ -566,6 +578,7 @@ mod service_runtime {
         tracing::info!("run_service_worker: Starting");
 
         let ssh_port = WindowsService::service_port().map_err(anyhow_to_win_error)?;
+        let key_dir = WindowsService::service_key_dir();
         let relay_url = WindowsService::service_relay_urls();
         let extra_relay_url = WindowsService::service_extra_relay_urls();
 
@@ -612,6 +625,7 @@ mod service_runtime {
                 ServerArgs {
                     ssh_port,
                     persist: true,
+                    key_dir,
                     relay_url,
                     extra_relay_url,
                 },

@@ -24,22 +24,35 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Service { op }) => {
             if !self_runas::is_elevated() {
                 self_runas::admin()?;
-                return Ok(())
+                return Ok(());
             } else {
                 match op {
-                    ServiceCmd::Install { ssh_port, relay_url, extra_relay_url } => api::service::install(ssh_port, relay_url, extra_relay_url).await,
+                    ServiceCmd::Install {
+                        ssh_port,
+                        key_dir,
+                        relay_url,
+                        extra_relay_url,
+                    } => api::service::install(ssh_port, key_dir, relay_url, extra_relay_url).await,
                     ServiceCmd::Uninstall => api::service::uninstall().await,
                 }
             }
         }
-        Some(Cmd::Info) => api::info_mode().await,
+        Some(Cmd::Info(args)) => api::info_mode(args.key_dir).await,
         Some(Cmd::Version) => {
             println!("iroh-ssh version {}", env!("CARGO_PKG_VERSION"));
             Ok(())
-        },
+        }
         Some(Cmd::Proxy(args)) => api::proxy_mode(args).await,
         #[cfg(target_os = "windows")]
-        Some(Cmd::RunService(args)) => iroh_ssh::run_service(args.ssh_port, args.relay_url, args.extra_relay_url).await,
+        Some(Cmd::RunService(args)) => {
+            iroh_ssh::run_service(
+                args.ssh_port,
+                args.key_dir,
+                args.relay_url,
+                args.extra_relay_url,
+            )
+            .await
+        }
         #[cfg(not(target_os = "windows"))]
         Some(Cmd::RunService(_)) => {
             bail!("service runtime is only available on windows");
