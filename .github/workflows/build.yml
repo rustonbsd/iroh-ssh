@@ -199,23 +199,13 @@ jobs:
           fi
           set -e
           
-          if grep -qiE "(permission denied|password|publickey|authentication failed|Connection closed)" connect_output.txt; then
-            echo "SUCCESS: Connection reached SSH authentication stage"
+          if grep -q "Permanently added" connect_output.txt; then
+            echo "SUCCESS: Connection reached SSH host (host key exchanged)"
             kill $SERVER_PID || true
             exit 0
-          elif grep -qiE "(connection refused|network|timeout|no route)" connect_output.txt; then
+          else
             echo "FAILURE: Could not establish connection"
             cat connect_output.txt
-            kill $SERVER_PID || true
-            exit 1
-          else
-            echo "Test completed - checking if connection was attempted"
-            cat connect_output.txt
-            if [ $EXIT_CODE -eq 255 ]; then
-              echo "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
-              kill $SERVER_PID || true
-              exit 0
-            fi
             kill $SERVER_PID || true
             exit 1
           fi
@@ -474,26 +464,14 @@ jobs:
           Write-Host "Connect output:"
           Write-Host $ConnectOutput
           
-          if ($ConnectOutput -match "(permission denied|password|publickey|authentication|Connection closed)") {
-            Write-Host "SUCCESS: Connection reached SSH authentication stage"
-            Stop-Job -Job $ServerJob
-            Remove-Job -Job $ServerJob
-            exit 0
-          }
-          elseif ($ConnectOutput -match "(connection refused|network|timeout|no route)") {
-            Write-Host "FAILURE: Could not establish connection"
-            Stop-Job -Job $ServerJob
-            Remove-Job -Job $ServerJob
-            exit 1
-          }
-          elseif ($ExitCode -eq 255) {
-            Write-Host "SUCCESS: Connection reached SSH authentication stage (exit code 255)"
+          if ($ConnectOutput -match "Permanently added") {
+            Write-Host "SUCCESS: Connection reached SSH host (host key exchanged)"
             Stop-Job -Job $ServerJob
             Remove-Job -Job $ServerJob
             exit 0
           }
           else {
-            Write-Host "Test result unclear"
+            Write-Host "FAILURE: Could not establish connection"
             Stop-Job -Job $ServerJob
             Remove-Job -Job $ServerJob
             exit 1
@@ -787,8 +765,8 @@ jobs:
 
             if echo "$CONNECT_OUT" | grep -q "keydir-${label}-ok"; then
               echo "SUCCESS: Connected to ${label}"
-            elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$CONNECT_EXIT" -eq 255 ]; then
-              echo "SUCCESS: Reached SSH auth on ${label}"
+            elif echo "$CONNECT_OUT" | grep -q "Permanently added"; then
+              echo "SUCCESS: Reached SSH host on ${label} (host key exchanged)"
             else
               echo "ERROR: Could not reach ${label}"
               exit 1
@@ -923,8 +901,8 @@ jobs:
 
             if ($ConnectOut -match "keydir-default-ok") {
               Write-Host "SUCCESS: Connected to default server"
-            } elseif ($ConnectOut -match "(permission denied|publickey|authentication|Connection closed)" -or $ConnExit -eq 255) {
-              Write-Host "SUCCESS: Reached SSH auth on default server"
+            } elseif ($ConnectOut -match "Permanently added") {
+              Write-Host "SUCCESS: Reached SSH host on default server (host key exchanged)"
             } else {
               throw "Could not reach default server"
             }
@@ -937,8 +915,8 @@ jobs:
 
             if ($ConnectOut -match "keydir-custom-ok") {
               Write-Host "SUCCESS: Connected to custom key-dir server"
-            } elseif ($ConnectOut -match "(permission denied|publickey|authentication|Connection closed)" -or $ConnExit -eq 255) {
-              Write-Host "SUCCESS: Reached SSH auth on custom key-dir server"
+            } elseif ($ConnectOut -match "Permanently added") {
+              Write-Host "SUCCESS: Reached SSH host on custom key-dir server (host key exchanged)"
             } else {
               throw "Could not reach custom key-dir server"
             }
@@ -1005,8 +983,8 @@ jobs:
 
             if echo "$CONNECT_OUT" | grep -q "svc-${label}-ok"; then
               echo "SUCCESS: Connected to ${label}"
-            elif echo "$CONNECT_OUT" | grep -qiE "(permission denied|publickey|authentication|Connection closed)" || [ "$CONNECT_EXIT" -eq 255 ]; then
-              echo "SUCCESS: Reached SSH auth on ${label}"
+            elif echo "$CONNECT_OUT" | grep -q "Permanently added"; then
+              echo "SUCCESS: Reached SSH host on ${label} (host key exchanged)"
             else
               echo "ERROR: Could not reach ${label}"
               return 1
@@ -1153,8 +1131,8 @@ jobs:
 
               if ($Out -match "svc-${Label}-ok") {
                 Write-Host "SUCCESS: Connected to $Label"
-              } elseif ($Out -match "(permission denied|publickey|authentication|Connection closed)" -or $Exit -eq 255) {
-                Write-Host "SUCCESS: Reached SSH auth on $Label"
+              } elseif ($Out -match "Permanently added") {
+                Write-Host "SUCCESS: Reached SSH host on $Label (host key exchanged)"
               } else {
                 throw "Could not reach $Label"
               }
