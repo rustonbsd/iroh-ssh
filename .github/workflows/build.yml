@@ -1014,7 +1014,11 @@ jobs:
           echo "Info (service, no key-dir):"
           echo "$INFO_DEFAULT"
 
-          SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -A1 'service iroh-ssh endpoint' | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          if [ -z "$SVC_ENDPOINT_DEFAULT" ]; then
+            # Fall back to first endpoint if no service-specific one found
+            SVC_ENDPOINT_DEFAULT=$(echo "$INFO_DEFAULT" | grep -oP '@\K[a-f0-9]{64}' | head -1)
+          fi
           if [ -z "$SVC_ENDPOINT_DEFAULT" ]; then
             echo "ERROR: Could not extract service endpoint from info"
             exit 1
@@ -1163,7 +1167,10 @@ jobs:
             Write-Host "Info (service, no key-dir):"
             Write-Host $InfoDefault
 
-            if ($InfoDefault -match '@([a-f0-9]{64})') {
+            $SvcLines = ($InfoDefault -split "`n") | Select-String -Pattern 'service iroh-ssh endpoint' -Context 0,1
+            if ($SvcLines -and $SvcLines.Context.PostContext -match '@([a-f0-9]{64})') {
+              $SvcEndpointDefault = $Matches[1]
+            } elseif ($InfoDefault -match '@([a-f0-9]{64})') {
               $SvcEndpointDefault = $Matches[1]
             } else {
               throw "Could not extract service endpoint from info"
