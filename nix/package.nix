@@ -18,7 +18,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     owner = "rustonbsd";
     repo = "iroh-ssh";
     tag = finalAttrs.version;
-    hash = "sha256-n4kNzhQBasl7vAWAJysNwHsmsf8F8leXP0jBoB5hHhU=";
+    hash = "sha256-LXLXKrJ2nJzlW8eNhXS9tr9oGp8RlwJPIojqDIdVZf0=";
   };
 
   cargoHash = "sha256-/cq/rOzrQ4t0qvdaqM3JhRn8IMncx7jWYDjdYmLCYvc=";
