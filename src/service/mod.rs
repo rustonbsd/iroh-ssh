@@ -17,7 +17,7 @@ pub async fn run_service(
 ) -> anyhow::Result<()> {
     WindowsService::run_service(ServiceParams {
         ssh_port,
-        key_dir,
+        key_dir: crate::api::abs_key_dir(key_dir),
         relay_url,
         extra_relay_url,
     })

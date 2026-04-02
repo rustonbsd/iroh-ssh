@@ -81,7 +81,7 @@ pub async fn info_mode(key_dir: Option<PathBuf>) -> anyhow::Result<()> {
 pub mod service {
     use std::path::PathBuf;
 
-    use crate::{ServiceParams, install_service, uninstall_service};
+    use crate::{ServiceParams, api::abs_key_dir, install_service, uninstall_service};
 
     pub async fn install(
         ssh_port: u16,
@@ -91,7 +91,7 @@ pub mod service {
     ) -> anyhow::Result<()> {
         if install_service(ServiceParams {
             ssh_port,
-            key_dir,
+            key_dir: abs_key_dir(key_dir),
             relay_url,
             extra_relay_url,
         })
@@ -228,4 +228,14 @@ pub(crate) fn exit_with_code(status: ExitStatus) {
 #[cfg(not(unix))]
 pub(crate) fn exit_with_code(status: ExitStatus) {
     std::process::exit(status.code().unwrap_or(1));
+}
+
+pub(crate) fn abs_key_dir(key_dir: Option<PathBuf>) -> Option<PathBuf> {
+    key_dir.map(|key_dir| {
+        if key_dir.is_absolute() {
+            key_dir
+        } else {
+            std::env::current_dir().unwrap_or_default().join(key_dir)
+        }
+    })
 }
