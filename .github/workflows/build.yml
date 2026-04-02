@@ -1167,12 +1167,20 @@ jobs:
             Write-Host "Info (service, no key-dir):"
             Write-Host $InfoDefault
 
-            $SvcLines = ($InfoDefault -split "`n") | Select-String -Pattern 'service iroh-ssh endpoint' -Context 0,1
-            if ($SvcLines -and $SvcLines.Context.PostContext -match '@([a-f0-9]{64})') {
+            $SvcEndpointDefault = $null
+            $Lines = $InfoDefault -split "`n"
+            for ($i = 0; $i -lt $Lines.Count; $i++) {
+              if ($Lines[$i] -match 'service iroh-ssh endpoint' -and ($i + 1) -lt $Lines.Count) {
+                if ($Lines[$i + 1] -match '@([a-f0-9]{64})') {
+                  $SvcEndpointDefault = $Matches[1]
+                  break
+                }
+              }
+            }
+            if (-not $SvcEndpointDefault -and $InfoDefault -match '@([a-f0-9]{64})') {
               $SvcEndpointDefault = $Matches[1]
-            } elseif ($InfoDefault -match '@([a-f0-9]{64})') {
-              $SvcEndpointDefault = $Matches[1]
-            } else {
+            }
+            if (-not $SvcEndpointDefault) {
               throw "Could not extract service endpoint from info"
             }
             Write-Host "Service endpoint (default): $SvcEndpointDefault"
