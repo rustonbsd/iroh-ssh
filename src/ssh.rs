@@ -152,66 +152,15 @@ impl IrohSsh {
         relay_urls: &[String],
         extra_relay_urls: &[String],
     ) -> anyhow::Result<Child> {
-        let cmd = &mut Command::new("ssh");
-
         let c_exe = std::env::current_exe()?;
-        let mut proxy_cmd = format!("{} proxy", c_exe.display());
-        for url in relay_urls {
-            proxy_cmd.push_str(&format!(" --relay-url {url}"));
-        }
-        for url in extra_relay_urls {
-            proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
-        }
-        proxy_cmd.push_str(" %h:%p");
-        cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
-
-        if let Some(p) = ssh_opts.port {
-            cmd.arg("-p").arg(p.to_string());
-        }
-        if let Some(id) = &ssh_opts.identity_file {
-            cmd.arg("-i").arg(id);
-        }
-        for l in &ssh_opts.local_forward {
-            cmd.arg("-L").arg(l);
-        }
-        for r in &ssh_opts.remote_forward {
-            cmd.arg("-R").arg(r);
-        }
-        for o in &ssh_opts.options {
-            cmd.arg("-o").arg(o);
-        }
-        if ssh_opts.agent {
-            cmd.arg("-A");
-        }
-        if ssh_opts.no_agent {
-            cmd.arg("-a");
-        }
-        if ssh_opts.x11_trusted {
-            cmd.arg("-Y");
-        } else if ssh_opts.x11 {
-            cmd.arg("-X");
-        }
-        if ssh_opts.no_cmd {
-            cmd.arg("-N");
-        }
-        if ssh_opts.force_tty {
-            cmd.arg("-t");
-        }
-        if ssh_opts.no_tty {
-            cmd.arg("-T");
-        }
-        for _ in 0..ssh_opts.verbose {
-            cmd.arg("-v");
-        }
-        if ssh_opts.quiet {
-            cmd.arg("-q");
-        }
-
-        cmd.arg(target);
-
-        if !remote_cmd.is_empty() {
-            cmd.args(remote_cmd.iter());
-        }
+        let mut cmd = build_ssh_command(
+            &c_exe,
+            target,
+            ssh_opts,
+            remote_cmd,
+            relay_urls,
+            extra_relay_urls,
+        );
 
         let ssh_process = cmd
             .stdin(Stdio::inherit())
@@ -260,6 +209,80 @@ impl IrohSsh {
     pub fn endpoint_id(&self) -> EndpointId {
         self.inner.as_ref().expect("inner not set").endpoint.id()
     }
+}
+
+fn build_ssh_command(
+    iroh_ssh_exe: &Path,
+    target: String,
+    ssh_opts: SshOpts,
+    remote_cmd: Vec<OsString>,
+    relay_urls: &[String],
+    extra_relay_urls: &[String],
+) -> Command {
+    let mut cmd = Command::new("ssh");
+
+    let mut proxy_cmd = format!("{} proxy", iroh_ssh_exe.display());
+    for url in relay_urls {
+        proxy_cmd.push_str(&format!(" --relay-url {url}"));
+    }
+    for url in extra_relay_urls {
+        proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
+    }
+    proxy_cmd.push_str(" %h:%p");
+    cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
+
+    if let Some(p) = ssh_opts.port {
+        cmd.arg("-p").arg(p.to_string());
+    }
+    if let Some(u) = &ssh_opts.login_user {
+        cmd.arg("-l").arg(u);
+    }
+    if let Some(id) = &ssh_opts.identity_file {
+        cmd.arg("-i").arg(id);
+    }
+    for l in &ssh_opts.local_forward {
+        cmd.arg("-L").arg(l);
+    }
+    for r in &ssh_opts.remote_forward {
+        cmd.arg("-R").arg(r);
+    }
+    for o in &ssh_opts.options {
+        cmd.arg("-o").arg(o);
+    }
+    if ssh_opts.agent {
+        cmd.arg("-A");
+    }
+    if ssh_opts.no_agent {
+        cmd.arg("-a");
+    }
+    if ssh_opts.x11_trusted {
+        cmd.arg("-Y");
+    } else if ssh_opts.x11 {
+        cmd.arg("-X");
+    }
+    if ssh_opts.no_cmd {
+        cmd.arg("-N");
+    }
+    if ssh_opts.force_tty {
+        cmd.arg("-t");
+    }
+    if ssh_opts.no_tty {
+        cmd.arg("-T");
+    }
+    for _ in 0..ssh_opts.verbose {
+        cmd.arg("-v");
+    }
+    if ssh_opts.quiet {
+        cmd.arg("-q");
+    }
+
+    cmd.arg(target);
+
+    if !remote_cmd.is_empty() {
+        cmd.args(remote_cmd.iter());
+    }
+
+    cmd
 }
 
 impl ProtocolHandler for IrohSsh {
@@ -438,5 +461,91 @@ pub fn dot_ssh(
                 ssh_dir.display()
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn args_of(cmd: &Command) -> Vec<String> {
+        cmd.as_std()
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn login_user_flag_is_passed_to_ssh() {
+        let mut opts = SshOpts::default();
+        opts.login_user = Some("alice".to_string());
+
+        let cmd = build_ssh_command(
+            Path::new("/usr/bin/iroh-ssh"),
+            "endpoint123".to_string(),
+            opts,
+            Vec::new(),
+            &[],
+            &[],
+        );
+
+        let args = args_of(&cmd);
+        let l_pos = args.iter().position(|a| a == "-l").expect("-l not found");
+        assert_eq!(args[l_pos + 1], "alice");
+    }
+
+    #[test]
+    fn rsync_invocation_parses_and_builds() {
+        // Mirrors `rsync -e iroh-ssh /local user@<id>:/remote`, which invokes:
+        //   iroh-ssh -l alice <endpoint_id> rsync --server -e.LsfxCIvu . /tmp/dest
+        let cli = crate::cli::Cli::try_parse_from([
+            "iroh-ssh",
+            "-l",
+            "alice",
+            "endpoint123",
+            "rsync",
+            "--server",
+            "-e.LsfxCIvu",
+            ".",
+            "/tmp/dest",
+        ])
+        .expect("CLI should accept rsync's invocation pattern");
+
+        assert_eq!(cli.target.as_deref(), Some("endpoint123"));
+        assert_eq!(cli.ssh.login_user.as_deref(), Some("alice"));
+        let remote_cmd_raw = cli.remote_cmd.unwrap_or_default();
+        let remote_cmd: Vec<String> = remote_cmd_raw
+            .iter()
+            .map(|o| o.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            remote_cmd,
+            vec!["rsync", "--server", "-e.LsfxCIvu", ".", "/tmp/dest"]
+        );
+
+        let cmd = build_ssh_command(
+            Path::new("/usr/bin/iroh-ssh"),
+            cli.target.unwrap(),
+            cli.ssh,
+            remote_cmd_raw,
+            &[],
+            &[],
+        );
+        let args = args_of(&cmd);
+
+        // -l alice should appear before the host arg
+        let host_pos = args
+            .iter()
+            .position(|a| a == "endpoint123")
+            .expect("host arg not found");
+        let l_pos = args.iter().position(|a| a == "-l").expect("-l not found");
+        assert!(l_pos < host_pos);
+        assert_eq!(args[l_pos + 1], "alice");
+
+        // remote command should follow the host
+        assert_eq!(args[host_pos + 1], "rsync");
+        assert_eq!(args[host_pos + 2], "--server");
+        assert_eq!(args[host_pos + 3], "-e.LsfxCIvu");
     }
 }

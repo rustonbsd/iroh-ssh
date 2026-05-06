@@ -121,6 +121,13 @@ pub struct SshOpts {
     )]
     pub port: Option<u16>,
 
+    #[arg(
+        short = 'l',
+        value_name = "USER",
+        help = "Login user (lets rsync's `-l user host cmd` invocation work)"
+    )]
+    pub login_user: Option<String>,
+
     #[arg(short = 'o', value_name = "KEY=VALUE",
         help = "Pass an ssh option (repeatable)", action = ArgAction::Append)]
     pub options: Vec<String>,
