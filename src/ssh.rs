@@ -12,7 +12,9 @@ use iroh::{
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
-    io::AsyncWriteExt, net::TcpStream, process::{Child, Command}
+    io::AsyncWriteExt,
+    net::TcpStream,
+    process::{Child, Command},
 };
 
 impl Builder {
@@ -204,7 +206,6 @@ impl IrohSsh {
         let (_, _) = tokio::join!(a_to_b, b_to_a);
         Ok(())
     }
-
 
     pub fn endpoint_id(&self) -> EndpointId {
         self.inner.as_ref().expect("inner not set").endpoint.id()
@@ -478,8 +479,10 @@ mod tests {
 
     #[test]
     fn login_user_flag_is_passed_to_ssh() {
-        let mut opts = SshOpts::default();
-        opts.login_user = Some("alice".to_string());
+        let opts = SshOpts {
+            login_user: Some("alice".to_string()),
+            ..Default::default()
+        };
 
         let cmd = build_ssh_command(
             Path::new("/usr/bin/iroh-ssh"),
