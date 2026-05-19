@@ -185,7 +185,7 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
         .extra_relay_urls(parse_relay_urls(&connect_args.extra_relay_url)?)
         .build()
         .await?;
-    let mut ssh_process = iroh_ssh
+    let mut ssh_process = match iroh_ssh
         .start_ssh(
             connect_args.target,
             connect_args.ssh,
@@ -193,11 +193,26 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
             &connect_args.relay_url,
             &connect_args.extra_relay_url,
         )
-        .await?;
+        .await
+    {
+        Ok(child) => child,
+        Err(err) => match err.kind() {
+            std::io::ErrorKind::NotFound => {
+                eprintln!(
+                    "SSH command not found, please make sure your system has an SSH client installed and and that the exact cmd \"ssh\" is in your PATH"
+                );
+                std::process::exit(1);
+            }
+            _ => {
+                eprintln!("Unknown failure when calling the SSH client: {err}");
+                std::process::exit(1);
+            }
+        },
+    };
 
     let status = ssh_process.wait().await?;
 
-    // this kills the process (ok is just here for now compile errors)
+    // this kills the process (ok is just here for no compile errors)
     exit_with_code(status);
 
     Ok(())
