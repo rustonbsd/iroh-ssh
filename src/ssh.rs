@@ -1,9 +1,10 @@
 use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
-use std::{ffi::OsString, path::Path, process::Stdio};
+use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
+use regex::Regex;
 use std::sync::Arc;
 
 use iroh::{
@@ -12,7 +13,7 @@ use iroh::{
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
     process::{Child, Command},
 };
@@ -114,6 +115,10 @@ impl Builder {
         };
 
         let router = if self.accept_incoming {
+            if is_ssh_server_available(iroh_ssh.ssh_port, Duration::from_secs(10)).await.is_err() {
+                eprintln!("SSH server not available on port {}, incoming connections will fail. Please ensure you have an SSH server installed and running on port {}.", iroh_ssh.ssh_port, iroh_ssh.ssh_port);
+                bail!("no ssh server available on specified port")
+            }
             Router::builder(endpoint.clone()).accept(IrohSsh::ALPN(), iroh_ssh.clone())
         } else {
             Router::builder(endpoint.clone())
@@ -124,6 +129,27 @@ impl Builder {
 
         Ok(iroh_ssh)
     }
+}
+
+async fn is_ssh_server_available(port: u16, timeout: Duration) -> anyhow::Result<()> {
+    tokio::time::timeout(timeout, async {
+        let stream = TcpStream::connect(format!("localhost:{port}")).await?;
+        let mut reader = BufReader::new(stream);
+        let mut line_buf = String::new();
+        let regex = Regex::new(r"^SSH-\d+\.\d+-").expect("valid regex");
+
+        loop {
+            line_buf.clear();
+            if reader.read_line(&mut line_buf).await? == 0 {
+                bail!("SSH server closed the connection");
+            }
+            if regex.is_match(&line_buf) {
+                reader.shutdown().await.ok();
+                return Ok(());
+            }
+        }
+    })
+    .await?
 }
 
 impl Default for Builder {
@@ -153,7 +179,7 @@ impl IrohSsh {
         remote_cmd: Vec<OsString>,
         relay_urls: &[String],
         extra_relay_urls: &[String],
-    ) -> anyhow::Result<Child> {
+    ) -> io::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let mut cmd = build_ssh_command(
             &c_exe,
