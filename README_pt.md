@@ -5,6 +5,7 @@
 [![Documentation](https://docs.rs/iroh-ssh/badge.svg)](https://docs.rs/iroh-ssh)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 [![AUR](https://img.shields.io/aur/version/iroh-ssh-git)](https://aur.archlinux.org/packages/iroh-ssh-git)
+[![Discord](https://img.shields.io/discord/1403836127458099381?logo=discord&label=Discord)](https://discord.gg/eyC7nku3C)
 
 **Acesse qualquer máquina sem IP, atrás de um NAT/firewall, sem redirecionamento de portas ou configuração de VPN.**
 
@@ -43,7 +44,7 @@ Baixe e configure automaticamente o binário para o seu sistema operacional a pa
 Linux
 ```bash
 # Linux
-wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.10/iroh-ssh.linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.11/iroh-ssh.linux
 chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
@@ -51,7 +52,7 @@ sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 macOS
 ```bash
 # macOS arm
-curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.10/iroh-ssh.macos
+curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.11/iroh-ssh.macos
 chmod +x iroh-ssh.macos
 sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 ```
@@ -59,7 +60,7 @@ sudo mv iroh-ssh.macos /usr/local/bin/iroh-ssh
 Windows
 ```bash
 # Windows x86 64bit
-curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.10/iroh-ssh.exe
+curl -L -o iroh-ssh.exe https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.11/iroh-ssh.exe
 mkdir %LOCALAPPDATA%\iroh-ssh
 move iroh-ssh.exe %LOCALAPPDATA%\iroh-ssh\
 setx PATH "%PATH%;%LOCALAPPDATA%\iroh-ssh"
@@ -141,7 +142,7 @@ Exiba seu ID de nó e compartilhe-o para permitir a conexão
 > iroh-ssh info
 
     Your iroh-ssh endpoint id: 38b7dc10df96005255c3beaeaeef6cfebd88344aa8c85e1dbfc1ad5e50f372ac
-    iroh-ssh version 0.2.10
+    iroh-ssh version 0.2.11
     https://github.com/rustonbsd/iroh-ssh
 
     Your server iroh-ssh endpoint id:
