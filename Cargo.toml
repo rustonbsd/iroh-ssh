@@ -7,7 +7,7 @@ repository = "https://github.com/rustonbsd/iroh-ssh"
 readme = "README.md"
 keywords = ["networking"]
 categories = ["network-programming"]
-version = "0.2.10"
+version = "0.2.11"
 edition = "2024"
 
 [dependencies]
@@ -18,16 +18,16 @@ rand = "0.9"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "ansi"] }
-tracing-appender = "0.2.4"
-tokio = { version = "1.50.0", features = [
+tracing-appender = "0.2.5"
+tokio = { version = "1.52.3", features = [
     "macros",
     "io-util",
     "sync",
     "rt",
 ] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 homedir = "0.3.6"
-whoami = "2.1.1"
+whoami = "2.1.2"
 z32 = "1.3"
 runas = "1.2.0"
 tempfile = "3.27.0"
@@ -35,7 +35,7 @@ self-runas = "0.1"
 regex = "1.12.3"
 
 [target.'cfg(windows)'.dependencies.windows-service]
-version = "0.8.0"
+version = "0.8.1"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.61.2"
@@ -54,7 +54,7 @@ features = [
 ]
 
 [target.'cfg(unix)'.dependencies.libc]
-version = "0.2.183"
+version = "0.2.186"
 
 [profile.release]
 opt-level = 3
