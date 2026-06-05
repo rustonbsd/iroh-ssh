@@ -34,6 +34,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Resolve dependencies fresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f Cargo.lock
+          cargo generate-lockfile
+          cargo tree --target "${{ matrix.platform.target }}" --depth 1
+
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
