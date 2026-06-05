@@ -7,24 +7,21 @@ repository = "https://github.com/rustonbsd/iroh-ssh"
 readme = "README.md"
 keywords = ["networking"]
 categories = ["network-programming"]
-version = "0.2.11"
+version = "0.2.12"
 edition = "2024"
 
 [dependencies]
 anyhow = "1.0.102"
 iroh = "0.94"
-ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+ed25519 = { version = "=3.0.0-rc.1", default-features = false }
+ed25519-dalek = { version = "=3.0.0-pre.1", features = ["rand_core"] }
+pkcs8 = { version = "=0.11.0-rc.11", default-features = false }
 rand = "0.9"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "ansi"] }
 tracing-appender = "0.2.5"
-tokio = { version = "1.52.3", features = [
-    "macros",
-    "io-util",
-    "sync",
-    "rt",
-] }
+tokio = { version = "1.52.3", features = ["macros", "io-util", "sync", "rt"] }
 clap = { version = "4.6.1", features = ["derive"] }
 homedir = "0.3.6"
 whoami = "2.1.2"
