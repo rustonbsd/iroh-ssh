@@ -18,14 +18,14 @@ fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
 
 pub async fn info_mode(key_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let server_key = dot_ssh(
-        &SecretKey::generate(&mut rand::rng()),
+        &SecretKey::generate(),
         false,
         false,
         key_dir.as_deref(),
     )
     .ok();
     let service_key = dot_ssh(
-        &SecretKey::generate(&mut rand::rng()),
+        &SecretKey::generate(),
         false,
         true,
         key_dir.as_deref(),

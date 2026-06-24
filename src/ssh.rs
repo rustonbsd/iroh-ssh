@@ -21,7 +21,7 @@ use tokio::{
 impl Builder {
     pub fn new() -> Self {
         Self {
-            secret_key: SecretKey::generate(&mut rand::rng()).to_bytes(),
+            secret_key: SecretKey::generate().to_bytes(),
             accept_incoming: false,
             accept_port: None,
             key_dir: None,
@@ -92,7 +92,7 @@ impl Builder {
     pub async fn build(&mut self) -> anyhow::Result<IrohSsh> {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
-        let mut builder = Endpoint::builder().secret_key(secret_key);
+        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0).secret_key(secret_key);
 
         if !self.relay_urls.is_empty() {
             let relay_map = self.relay_urls.iter().cloned().collect();
@@ -314,7 +314,7 @@ fn build_ssh_command(
 
 impl ProtocolHandler for IrohSsh {
     async fn accept(&self, connection: Connection) -> Result<(), iroh::protocol::AcceptError> {
-        let endpoint_id = connection.remote_id()?;
+        let endpoint_id = connection.remote_id();
 
         match connection.accept_bi().await {
             Ok((mut iroh_send, mut iroh_recv)) => {
