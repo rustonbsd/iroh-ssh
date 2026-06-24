@@ -1,6 +1,6 @@
 # Custom Relay Setup
 
-This version of `iroh-ssh` is built on iroh version `0.94`. If you want to use a custom relay server as seen in the examples below, you need to use the matching `iroh-relay` of version `0.94`. See [setup relay server](#setup-relay-server) for more information on how to set up a relay server.
+This version of `iroh-ssh` is built on iroh version `1.0.0`. This is tested to be compatible with `0.94.0` and I assume it works with the intermediate versions as well. See [setup relay server](#setup-relay-server) for more information on how to set up a relay server.
 
 ## Usage --relay-url
 
@@ -20,13 +20,13 @@ The easiest way is to use `n0-computers` own `iroh-relay` Docker image:
 
 ```bash
 # Creates a relay server bound to 'http://localhost:3340'
-> docker run n0computer/iroh-relay:v0.94.0 --dev
+> docker run n0computer/iroh-relay:v1.0.0 --dev
 ```
 
 The best resource for setting up your own relay server beyond the `--dev` testing mode is the [iroh-relay README](https://github.com/n0-computer/iroh/tree/main/iroh-relay). To run securely with TLS you can pass a config `--config-path <PATH>` option as follows:
 
 ```bash
-> docker run -d -p 80:80 -p 443:443 -v /path/with/config/:/app n0computer/iroh-relay:v0.94.0 --config-path /app/relay-config.toml
+> docker run -d -p 80:80 -p 443:443 -v /path/with/config/:/app n0computer/iroh-relay:v1.0.0 --config-path /app/relay-config.toml
 ```
 
 and to get you started, here my example `relay-config.toml`:
