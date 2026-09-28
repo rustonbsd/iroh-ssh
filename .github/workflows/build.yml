@@ -1,6 +1,7 @@
 name: Build cross-platform artifacts
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
