@@ -21,6 +21,10 @@ jobs:
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-musl
             ext: ""
+          - name: Linux aarch64 (musl)
+            runs-on: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            ext: ""
           - name: Windows x86_64 (MSVC)
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
@@ -105,6 +109,10 @@ jobs:
           - name: Linux x86_64 (musl)
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-musl
+            ext: ".linux"
+          - name: Linux aarch64 (musl)
+            runs-on: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
             ext: ".linux"
           - name: Windows x86_64 (MSVC)
             runs-on: windows-latest
