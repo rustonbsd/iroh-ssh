@@ -94,6 +94,18 @@ impl Builder {
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mut builder = Endpoint::builder().secret_key(secret_key);
 
+        // On native targets the N0 preset resolves peers through DNS TXT records only
+        // (the pkarr HTTPS resolver is wired up for browsers). n0's DNS zone can lag
+        // behind the pkarr store, so a peer that is published and resolvable over HTTPS
+        // still fails with "Discovery produced no results". Add the HTTPS resolver as a
+        // second, DNS-independent lookup path.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use iroh::discovery::pkarr::PkarrResolver;
+
+            builder = builder.discovery(PkarrResolver::n0_dns());
+        }
+
         if !self.relay_urls.is_empty() {
             let relay_map = self.relay_urls.iter().cloned().collect();
             builder = builder.relay_mode(RelayMode::Custom(relay_map));
