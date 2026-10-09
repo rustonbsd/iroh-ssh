@@ -70,7 +70,9 @@ jobs:
           
           OUT_EXT="${EXT}"
           if [ -z "${OUT_EXT}" ]; then
-            if [[ "${TARGET}" == *"linux"* ]]; then
+            if [[ "${TARGET}" == *"aarch64"* ]]; then
+              OUT_EXT=".linux-aarch64"
+            elif [[ "${TARGET}" == *"linux"* ]]; then
               OUT_EXT=".linux"
             elif [[ "${TARGET}" == *"apple-darwin"* ]]; then
               OUT_EXT=".macos"
@@ -114,7 +116,7 @@ jobs:
           - name: Linux aarch64 (musl)
             runs-on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-            ext: ".linux"
+            ext: ".linux-aarch64"
           - name: Windows x86_64 (MSVC)
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
