@@ -4,6 +4,7 @@ use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
+use iroh_mainline_address_lookup::DhtAddressLookup;
 use regex::Regex;
 use std::sync::Arc;
 
@@ -92,7 +93,13 @@ impl Builder {
     pub async fn build(&mut self) -> anyhow::Result<IrohSsh> {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
-        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0).secret_key(secret_key);
+        let mdns_lookup = iroh_mdns_peer_lookup::Options::new()
+            .announce(self.accept_incoming)
+            .build();
+        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
+            .secret_key(secret_key)
+            .address_lookup(DhtAddressLookup::builder())
+            .address_lookup(iroh_mdns_peer_lookup::lookup(mdns_lookup).await?);
 
         if !self.relay_urls.is_empty() {
             let relay_map = self.relay_urls.iter().cloned().collect();
