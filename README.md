@@ -49,7 +49,15 @@ chmod +x iroh-ssh.linux
 sudo mv iroh-ssh.linux /usr/local/bin/iroh-ssh
 ```
 
-macOS
+Linux (ARM)
+```bash
+# Linux
+wget https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.12/iroh-ssh.linux-aarch64
+chmod +x iroh-ssh.linux-aarch64
+sudo mv iroh-ssh.linux-aarch64 /usr/local/bin/iroh-ssh
+```
+
+macOS (ARM)
 ```bash
 # macOS arm
 curl -LJO https://github.com/rustonbsd/iroh-ssh/releases/download/0.2.12/iroh-ssh.macos
