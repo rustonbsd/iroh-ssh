@@ -338,8 +338,11 @@ impl ProtocolHandler for IrohSsh {
                             iroh_send.finish().ok();
                             res
                         };
-                        let b_to_a =
-                            async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
+                        let b_to_a = async move {
+                            let res = tokio::io::copy(&mut iroh_recv, &mut local_write).await;
+                            local_write.shutdown().await.ok();
+                            res
+                        };
 
                         let (_, _) = tokio::join!(a_to_b, b_to_a);
                     }
