@@ -6,10 +6,13 @@ use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
 use iroh_mainline_address_lookup::DhtAddressLookup;
 use regex::Regex;
-use std::sync::Arc;
 
 use iroh::{
-    Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
+    Endpoint, EndpointId, RelayConfig, RelayMap, RelayUrl, SecretKey,
+    address_lookup::{DnsAddressLookup, PkarrPublisher, PkarrResolver},
+    defaults::prod::{
+        default_ap_relay, default_eu_relay, default_na_east_relay, default_na_west_relay,
+    },
     endpoint::{Connection, RelayMode},
     protocol::{ProtocolHandler, Router},
 };
@@ -94,25 +97,67 @@ impl Builder {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mdns_lookup = iroh_mdns_peer_lookup::Options::new()
-            .announce(self.accept_incoming)
+            .announce(self.accept_incoming) //self.accept_incoming)
+            .lookup_on(iroh_mdns_peer_lookup::IPVersion::Both)
             .build();
-        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
+
+        let mut builder = Endpoint::builder(iroh::endpoint::presets::Minimal)
             .secret_key(secret_key)
-            .address_lookup(DhtAddressLookup::builder())
             .address_lookup(iroh_mdns_peer_lookup::lookup(mdns_lookup).await?);
 
-        if !self.relay_urls.is_empty() {
-            let relay_map = self.relay_urls.iter().cloned().collect();
-            builder = builder.relay_mode(RelayMode::Custom(relay_map));
-        } else if !self.extra_relay_urls.is_empty() {
-            let relay_map = RelayMode::Default.relay_map();
-            for url in &self.extra_relay_urls {
-                relay_map.insert(url.clone(), Arc::new(RelayConfig::from(url.clone())));
-            }
-            builder = builder.relay_mode(RelayMode::Custom(relay_map));
+        let relay_configs = if !self.relay_urls.is_empty() {
+            self.relay_urls
+                .iter()
+                .map(|url| RelayConfig::new(url.clone(), None))
+                .collect::<Vec<_>>()
+        } else {
+            let mut config = self
+                .extra_relay_urls
+                .iter()
+                .map(|url| RelayConfig::new(url.clone(), None))
+                .collect::<Vec<_>>();
+            config.extend([
+                default_na_east_relay(),
+                default_na_west_relay(),
+                default_eu_relay(),
+                default_ap_relay(),
+            ]);
+            config
+        };
+
+        if !relay_configs.is_empty() {
+            builder = builder.relay_mode(RelayMode::Custom(RelayMap::from_iter(relay_configs)));
+        } else {
+            builder = builder.relay_mode(RelayMode::Disabled);
         }
 
+        // bind endpoint first
         let endpoint = builder.bind().await?;
+
+        // then add discovery methods, this avoids mDNS lookup to take a long time if no relay is available
+        endpoint
+            .address_lookup()?
+            .add(DnsAddressLookup::n0_dns().build());
+        endpoint.address_lookup()?.add(
+            PkarrPublisher::n0_dns().build(self.secret_key.into(), endpoint.tls_config().clone()),
+        );
+        endpoint
+            .address_lookup()?
+            .add(PkarrResolver::n0_dns().build(endpoint.tls_config().clone()));
+
+        // add pkarr dht address lookup *after* all other discovery methods and in a separate taks
+        // (it takes forever to load if added synchronously during endpoint creation)
+        tokio::spawn({
+            let endpoint = endpoint.clone();
+            async move {
+                if let Ok(addr_lookup) = endpoint.address_lookup()
+                    && let Ok(dht) = DhtAddressLookup::builder().build()
+                {
+                    endpoint.online().await;
+                    addr_lookup.add(dht);
+                }
+            }
+        });
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.id().as_bytes(),
