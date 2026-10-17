@@ -4,7 +4,7 @@ use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
-use iroh_mainline_address_lookup::DhtAddressLookup;
+//use iroh_mainline_address_lookup::DhtAddressLookup;
 use regex::Regex;
 
 use iroh::{
@@ -97,8 +97,8 @@ impl Builder {
         // Iroh setup
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mdns_lookup = iroh_mdns_peer_lookup::Options::new()
-            .announce(self.accept_incoming) //self.accept_incoming)
-            .lookup_on(iroh_mdns_peer_lookup::IPVersion::Both)
+            .announce(self.accept_incoming)
+            .lookup_on(iroh_mdns_peer_lookup::IPVersion::V4)
             .build();
 
         let mut builder = Endpoint::builder(iroh::endpoint::presets::Minimal)
@@ -147,7 +147,7 @@ impl Builder {
 
         // add pkarr dht address lookup *after* all other discovery methods and in a separate taks
         // (it takes forever to load if added synchronously during endpoint creation)
-        tokio::spawn({
+        /*tokio::spawn({
             let endpoint = endpoint.clone();
             async move {
                 if let Ok(addr_lookup) = endpoint.address_lookup()
@@ -157,7 +157,7 @@ impl Builder {
                     addr_lookup.add(dht);
                 }
             }
-        });
+        });*/
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.id().as_bytes(),
