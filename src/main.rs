@@ -17,6 +17,7 @@ async fn main() -> anyhow::Result<()> {
                 target: args.target,
                 relay_url: args.relay_url,
                 extra_relay_url: args.extra_relay_url,
+                dial_relay_url: args.dial_relay_url,
             };
             api::client_mode(conn_args).await
         }
@@ -64,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
                 target: cli.target.unwrap_or_default(),
                 relay_url: cli.relay_url,
                 extra_relay_url: cli.extra_relay_url,
+                dial_relay_url: cli.dial_relay_url,
             };
             api::client_mode(conn_args).await
         }
