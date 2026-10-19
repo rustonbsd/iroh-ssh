@@ -6,6 +6,7 @@ const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 const RELAY_URL_HELP: &str = "Use only these relay servers, replacing the defaults (repeatable)";
 const EXTRA_RELAY_URL_HELP: &str = "Add relay servers alongside the defaults (repeatable)";
 const KEY_DIR_HELP: &str = "Directory for iroh-ssh identity keys (default: ~/.ssh)";
+const NO_PROBE_HELP: &str = "Skip the startup check for a local SSH server";
 
 #[derive(Parser, Debug)]
 #[command(name = "iroh-ssh", about = "ssh without ip")]
@@ -168,6 +169,9 @@ pub struct ServerArgs {
 
     #[arg(short, long, default_value_t = false)]
     pub persist: bool,
+
+    #[arg(long, default_value_t = false, help = NO_PROBE_HELP)]
+    pub no_probe: bool,
 
     #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
     pub key_dir: Option<PathBuf>,
