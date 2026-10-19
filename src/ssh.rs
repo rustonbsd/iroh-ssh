@@ -28,11 +28,17 @@ impl Builder {
             key_dir: None,
             relay_urls: Vec::new(),
             extra_relay_urls: Vec::new(),
+            skip_server_probe: false,
         }
     }
 
     pub fn accept_incoming(mut self, accept_incoming: bool) -> Self {
         self.accept_incoming = accept_incoming;
+        self
+    }
+
+    pub fn skip_server_probe(mut self, skip_server_probe: bool) -> Self {
+        self.skip_server_probe = skip_server_probe;
         self
     }
 
@@ -122,7 +128,11 @@ impl Builder {
         };
 
         let router = if self.accept_incoming {
-            if is_ssh_server_available(iroh_ssh.ssh_port, Duration::from_secs(10)).await.is_err() {
+            if !self.skip_server_probe
+                && is_ssh_server_available(iroh_ssh.ssh_port, Duration::from_secs(10))
+                    .await
+                    .is_err()
+            {
                 eprintln!("SSH server not available on port {}, incoming connections will fail. Please ensure you have an SSH server installed and running on port {}.", iroh_ssh.ssh_port, iroh_ssh.ssh_port);
                 bail!("no ssh server available on specified port")
             }
