@@ -118,7 +118,8 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
         .accept_port(server_args.ssh_port)
         .key_dir(server_args.key_dir.clone())
         .relay_urls(parse_relay_urls(&server_args.relay_url)?)
-        .extra_relay_urls(parse_relay_urls(&server_args.extra_relay_url)?);
+        .extra_relay_urls(parse_relay_urls(&server_args.extra_relay_url)?)
+        .skip_server_probe(server_args.no_probe);
     if server_args.persist {
         iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service);
     }

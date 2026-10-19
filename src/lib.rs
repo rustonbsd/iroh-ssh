@@ -40,4 +40,5 @@ pub struct Builder {
     key_dir: Option<PathBuf>,
     relay_urls: Vec<RelayUrl>,
     extra_relay_urls: Vec<RelayUrl>,
+    skip_server_probe: bool,
 }
