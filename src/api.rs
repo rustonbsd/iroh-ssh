@@ -16,6 +16,11 @@ fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
         .collect()
 }
 
+fn parse_dial_relay(url: Option<&str>) -> anyhow::Result<Option<RelayUrl>> {
+    url.map(|s| RelayUrl::from_str(s).map_err(|e| anyhow::anyhow!("invalid relay URL '{s}': {e}")))
+        .transpose()
+}
+
 pub async fn info_mode(key_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let server_key = dot_ssh(
         &SecretKey::generate(),
@@ -171,7 +176,8 @@ pub async fn proxy_mode(proxy_args: ProxyArgs) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("failed to parse hostname"))?;
     if hostname.len() == 64 && hostname.chars().all(|c| c.is_ascii_hexdigit()) {
         let endpoint_id = EndpointId::from_str(hostname)?;
-        iroh_ssh.connect_pubkey(endpoint_id).await
+        let dial_relay = parse_dial_relay(proxy_args.dial_relay_url.as_deref())?;
+        iroh_ssh.connect_pubkey(endpoint_id, dial_relay).await
     } else {
         // fallback to dns base (or ip) HostName connection (no iroh)
         iroh_ssh.connect_tcpip(&proxy_args.endpoint_id).await
@@ -192,6 +198,7 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
             connect_args.remote_cmd,
             &connect_args.relay_url,
             &connect_args.extra_relay_url,
+            connect_args.dial_relay_url.as_deref(),
         )
         .await
     {

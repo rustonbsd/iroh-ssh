@@ -9,7 +9,7 @@ use regex::Regex;
 use std::sync::Arc;
 
 use iroh::{
-    Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
+    Endpoint, EndpointAddr, EndpointId, RelayConfig, RelayUrl, SecretKey,
     endpoint::{Connection, RelayMode},
     protocol::{ProtocolHandler, Router},
 };
@@ -186,6 +186,7 @@ impl IrohSsh {
         remote_cmd: Vec<OsString>,
         relay_urls: &[String],
         extra_relay_urls: &[String],
+        dial_relay_url: Option<&str>,
     ) -> io::Result<Child> {
         let c_exe = std::env::current_exe()?;
         let mut cmd = build_ssh_command(
@@ -195,6 +196,7 @@ impl IrohSsh {
             remote_cmd,
             relay_urls,
             extra_relay_urls,
+            dial_relay_url,
         );
 
         let ssh_process = cmd
@@ -206,12 +208,20 @@ impl IrohSsh {
         Ok(ssh_process)
     }
 
-    pub async fn connect_pubkey(&self, endpoint_id: EndpointId) -> anyhow::Result<()> {
+    pub async fn connect_pubkey(
+        &self,
+        endpoint_id: EndpointId,
+        dial_relay: Option<RelayUrl>,
+    ) -> anyhow::Result<()> {
         let inner = self.inner.as_ref().expect("inner not set");
-        let conn = inner
-            .endpoint
-            .connect(endpoint_id, &IrohSsh::ALPN())
-            .await?;
+        // An explicit relay URL is enough addressing on its own; skip address lookup so the
+        // connection does not depend on discovery (which is unreliable on networks that block
+        // or intercept DNS).
+        let addr = match dial_relay {
+            Some(relay_url) => EndpointAddr::new(endpoint_id).with_relay_url(relay_url),
+            None => EndpointAddr::from(endpoint_id),
+        };
+        let conn = inner.endpoint.connect(addr, &IrohSsh::ALPN()).await?;
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move {
@@ -252,6 +262,7 @@ fn build_ssh_command(
     remote_cmd: Vec<OsString>,
     relay_urls: &[String],
     extra_relay_urls: &[String],
+    dial_relay_url: Option<&str>,
 ) -> Command {
     let mut cmd = Command::new("ssh");
 
@@ -261,6 +272,9 @@ fn build_ssh_command(
     }
     for url in extra_relay_urls {
         proxy_cmd.push_str(&format!(" --extra-relay-url {url}"));
+    }
+    if let Some(url) = dial_relay_url {
+        proxy_cmd.push_str(&format!(" --dial-relay-url {url}"));
     }
     proxy_cmd.push_str(" %h:%p");
     cmd.arg("-o").arg(format!("ProxyCommand={proxy_cmd}"));
