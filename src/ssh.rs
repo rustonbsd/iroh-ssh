@@ -4,6 +4,7 @@ use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 use anyhow::bail;
 use ed25519_dalek::SECRET_KEY_LENGTH;
 use homedir::my_home;
+use iroh_mainline_address_lookup::DhtAddressLookup;
 use iroh_mdns_sd::MdnsAddressLookup;
 use regex::Regex;
 use std::sync::Arc;
@@ -95,7 +96,6 @@ impl Builder {
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
-            //.address_lookup(DhtAddressLookup::builder())
             .address_lookup(MdnsAddressLookup::builder().advertise(true));
 
         if !self.relay_urls.is_empty() {
@@ -110,6 +110,24 @@ impl Builder {
         }
 
         let endpoint = builder.bind().await?;
+
+        // We spawn this *after* the endpoint is bound because for some reason this blocks endpoint startup
+        // in some conditions leading to a laggy feeling iroh-ssh. This way we block nothing and eventually
+        // still get pkarr discovery.
+        tokio::spawn({
+            let endpoint = endpoint.clone();
+            async move {
+                endpoint.online().await;
+                let Ok(addr_lookup) = endpoint.address_lookup() else {
+                    tracing::warn!("Pkarr discovery setup failed");
+                    return;
+                };
+
+                if let Ok(dht) = DhtAddressLookup::builder().build() {
+                    addr_lookup.add(dht);
+                }
+            }
+        });
 
         let mut iroh_ssh = IrohSsh {
             public_key: *endpoint.id().as_bytes(),
