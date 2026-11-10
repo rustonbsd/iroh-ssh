@@ -14,12 +14,14 @@ pub async fn run_service(
     key_dir: Option<std::path::PathBuf>,
     relay_url: Vec<String>,
     extra_relay_url: Vec<String>,
+    no_probe: bool,
 ) -> anyhow::Result<()> {
     WindowsService::run_service(ServiceParams {
         ssh_port,
         key_dir: crate::api::abs_key_dir(key_dir),
         relay_url,
         extra_relay_url,
+        no_probe,
     })
     .await
 }
@@ -40,6 +42,7 @@ pub struct ServiceParams {
     pub key_dir: Option<std::path::PathBuf>,
     pub relay_url: Vec<String>,
     pub extra_relay_url: Vec<String>,
+    pub no_probe: bool,
 }
 
 pub trait Service {

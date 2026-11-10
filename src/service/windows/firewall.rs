@@ -62,7 +62,7 @@ Write-Host 'Added HTTPS rule'
     );
 
     let output = Command::new("powershell")
-        .args(&[
+        .args([
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
@@ -105,7 +105,7 @@ Write-Host 'Removed HTTPS rule'
 "#;
 
     let output = Command::new("powershell")
-        .args(&[
+        .args([
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",

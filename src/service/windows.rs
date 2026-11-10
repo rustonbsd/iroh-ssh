@@ -65,6 +65,9 @@ static SERVICE_EXTRA_RELAY_URLS: OnceLock<Vec<String>> = OnceLock::new();
 static SERVICE_KEY_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
+static SERVICE_NO_PROBE: OnceLock<bool> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
 impl Service for WindowsService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         task::spawn_blocking(move || WindowsService::install_blocking(service_params))
@@ -107,9 +110,12 @@ impl WindowsService {
             })
             .ok_or_else(|| anyhow!("service port already initialized with different value"))?;
 
-        let _ = SERVICE_KEY_DIR.set(service_params.key_dir);
-        let _ = SERVICE_RELAY_URLS.set(service_params.relay_url);
-        let _ = SERVICE_EXTRA_RELAY_URLS.set(service_params.extra_relay_url);
+        SERVICE_KEY_DIR.set(service_params.key_dir).ok();
+        SERVICE_RELAY_URLS.set(service_params.relay_url).ok();
+        SERVICE_EXTRA_RELAY_URLS
+            .set(service_params.extra_relay_url)
+            .ok();
+        SERVICE_NO_PROBE.set(service_params.no_probe).ok();
 
         service_runtime::run().context("failed to start windows service dispatcher")?;
         Ok(())
@@ -132,6 +138,10 @@ impl WindowsService {
 
     fn service_key_dir() -> Option<PathBuf> {
         SERVICE_KEY_DIR.get().cloned().flatten()
+    }
+
+    fn service_no_probe() -> bool {
+        *SERVICE_NO_PROBE.get().unwrap_or(&false)
     }
 
     pub const SERVICE_NAME: &'static str = "iroh-ssh";
@@ -247,6 +257,9 @@ impl WindowsService {
                 for url in &service_params.extra_relay_url {
                     args.push(OsString::from("--extra-relay-url"));
                     args.push(OsString::from(url));
+                }
+                if service_params.no_probe {
+                    args.push(OsString::from("--no-probe"));
                 }
                 args
             },
@@ -435,7 +448,7 @@ impl WindowsService {
             }
 
             let mut new_acl: *mut ACL = ptr::null_mut();
-            let status = SetEntriesInAclW(1, &mut access, existing_dacl, &mut new_acl);
+            let status = SetEntriesInAclW(1, &access, existing_dacl, &mut new_acl);
             if status != ERROR_SUCCESS {
                 LocalFree(security_descriptor as _);
                 return Err(anyhow!(
@@ -581,6 +594,7 @@ mod service_runtime {
         let key_dir = WindowsService::service_key_dir();
         let relay_url = WindowsService::service_relay_urls();
         let extra_relay_url = WindowsService::service_extra_relay_urls();
+        let no_probe = WindowsService::service_no_probe();
 
         tracing::info!("run_service_worker: SSH port = {}", ssh_port);
 
@@ -628,6 +642,7 @@ mod service_runtime {
                     key_dir,
                     relay_url,
                     extra_relay_url,
+                    no_probe,
                 },
                 true,
             )
@@ -659,6 +674,6 @@ mod service_runtime {
     }
 
     fn anyhow_to_win_error(error: anyhow::Error) -> windows_service::Error {
-        windows_service::Error::Winapi(io::Error::new(io::ErrorKind::Other, error.to_string()))
+        windows_service::Error::Winapi(io::Error::other(error.to_string()))
     }
 }

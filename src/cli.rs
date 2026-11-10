@@ -198,6 +198,9 @@ pub enum ServiceCmd {
         #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
         key_dir: Option<PathBuf>,
 
+        #[arg(long, default_value_t = false, help = NO_PROBE_HELP)]
+        no_probe: bool,
+
         #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
         relay_url: Vec<String>,
 
@@ -215,9 +218,13 @@ pub struct ServiceArgs {
     #[arg(long, value_name = "DIR", help = KEY_DIR_HELP)]
     pub key_dir: Option<PathBuf>,
 
+    #[arg(long, default_value_t = false, help = NO_PROBE_HELP)]
+    pub no_probe: bool,
+
     #[arg(long, value_name = "URL", help = RELAY_URL_HELP, action = ArgAction::Append)]
     pub relay_url: Vec<String>,
 
     #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
     pub extra_relay_url: Vec<String>,
+
 }

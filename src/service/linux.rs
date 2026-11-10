@@ -69,6 +69,14 @@ impl LinuxService {
                         .to_str()
                         .ok_or_else(|| anyhow::anyhow!("failed to get current executable path"))?,
                 )
+                .replace(
+                    "[NO_PROBE]",
+                    if service_params.no_probe {
+                        "--no-probe"
+                    } else {
+                        ""
+                    },
+                )
                 .as_bytes(),
         )?;
         let sh_path = temp_sh.path().to_path_buf();
