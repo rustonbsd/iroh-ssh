@@ -32,7 +32,8 @@ async fn main() -> anyhow::Result<()> {
                         key_dir,
                         relay_url,
                         extra_relay_url,
-                    } => api::service::install(ssh_port, key_dir, relay_url, extra_relay_url).await,
+                        no_probe,
+                    } => api::service::install(ssh_port, key_dir, relay_url, extra_relay_url, no_probe).await,
                     ServiceCmd::Uninstall => api::service::uninstall().await,
                 }
             }
@@ -50,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
                 args.key_dir,
                 args.relay_url,
                 args.extra_relay_url,
+                args.no_probe,
             )
             .await
         }

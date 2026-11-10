@@ -88,12 +88,14 @@ pub mod service {
         key_dir: Option<PathBuf>,
         relay_url: Vec<String>,
         extra_relay_url: Vec<String>,
+        no_probe: bool,
     ) -> anyhow::Result<()> {
         if install_service(ServiceParams {
             ssh_port,
             key_dir: abs_key_dir(key_dir),
             relay_url,
             extra_relay_url,
+            no_probe,
         })
         .await
         .is_err()
