@@ -5,6 +5,8 @@ use clap::{ArgAction, Args, Parser, Subcommand};
 const TARGET_HELP: &str = "Target in the form user@ENDPOINT_ID";
 const RELAY_URL_HELP: &str = "Use only these relay servers, replacing the defaults (repeatable)";
 const EXTRA_RELAY_URL_HELP: &str = "Add relay servers alongside the defaults (repeatable)";
+const DIAL_RELAY_URL_HELP: &str =
+    "Dial the peer through this relay URL instead of resolving its address";
 const KEY_DIR_HELP: &str = "Directory for iroh-ssh identity keys (default: ~/.ssh)";
 const NO_PROBE_HELP: &str = "Skip the startup check for a local SSH server";
 
@@ -22,6 +24,9 @@ pub struct Cli {
 
     #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
     pub extra_relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = DIAL_RELAY_URL_HELP)]
+    pub dial_relay_url: Option<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
@@ -58,6 +63,9 @@ pub struct ProxyArgs {
 
     #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
     pub extra_relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = DIAL_RELAY_URL_HELP)]
+    pub dial_relay_url: Option<String>,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -70,6 +78,9 @@ pub struct ConnectArgs {
 
     #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
     pub extra_relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = DIAL_RELAY_URL_HELP)]
+    pub dial_relay_url: Option<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
@@ -88,6 +99,9 @@ pub struct ExecArgs {
 
     #[arg(long, value_name = "URL", help = EXTRA_RELAY_URL_HELP, action = ArgAction::Append)]
     pub extra_relay_url: Vec<String>,
+
+    #[arg(long, value_name = "URL", help = DIAL_RELAY_URL_HELP)]
+    pub dial_relay_url: Option<String>,
 
     #[command(flatten)]
     pub ssh: SshOpts,
