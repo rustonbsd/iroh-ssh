@@ -15,6 +15,7 @@ use iroh::{
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
+    fs,
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
     process::{Child, Command},
@@ -68,7 +69,7 @@ impl Builder {
         self
     }
 
-    pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
+    pub async fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
         tracing::info!(
             "dot_ssh_integration: persist={}, service={}",
             persist,
@@ -80,7 +81,9 @@ impl Builder {
             persist,
             service,
             self.key_dir.as_deref(),
-        ) {
+        )
+        .await
+        {
             Ok(secret_key) => {
                 tracing::info!("dot_ssh_integration: Successfully loaded/created SSH keys");
                 self.secret_key = secret_key.to_bytes();
@@ -385,7 +388,7 @@ impl ProtocolHandler for IrohSsh {
     }
 }
 
-pub fn dot_ssh(
+pub async fn dot_ssh(
     default_secret_key: &SecretKey,
     persist: bool,
     _service: bool,
@@ -424,7 +427,7 @@ pub fn dot_ssh(
             // Ensure directory exists when running as service
             if !ssh_dir.exists() {
                 tracing::info!("dot_ssh: Service SSH dir doesn't exist, creating it");
-                std::fs::create_dir_all(&ssh_dir)?;
+                fs::create_dir_all(&ssh_dir).await?;
             }
         }
     }
@@ -449,9 +452,9 @@ pub fn dot_ssh(
         }
         (false, true) => {
             tracing::info!("dot_ssh: Creating ssh_dir: {}", ssh_dir.display());
-            std::fs::create_dir_all(&ssh_dir)?;
+            fs::create_dir_all(&ssh_dir).await?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
-            dot_ssh(default_secret_key, persist, _service, key_dir)
+            Box::pin(dot_ssh(default_secret_key, persist, _service, key_dir)).await
         }
         (true, true) => {
             tracing::info!("dot_ssh: Branch (true, true) - directory exists, persist enabled");
@@ -462,7 +465,7 @@ pub fn dot_ssh(
             if pub_key.exists() && priv_key.exists() {
                 tracing::info!("dot_ssh: Keys exist, reading them");
                 // read secret key
-                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                if let Ok(secret_key) = fs::read(priv_key.clone()).await {
                     let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
                     sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
                     Ok(SecretKey::from_bytes(&sk_bytes))
@@ -477,7 +480,7 @@ pub fn dot_ssh(
                 let secret_key = default_secret_key.clone();
                 let public_key = secret_key.public();
 
-                match std::fs::write(&pub_key, z32::encode(public_key.as_bytes())) {
+                match fs::write(&pub_key, z32::encode(public_key.as_bytes())).await {
                     Ok(_) => {
                         tracing::info!("dot_ssh: Successfully wrote pub_key");
                     }
@@ -491,7 +494,7 @@ pub fn dot_ssh(
                     }
                 }
 
-                match std::fs::write(&priv_key, z32::encode(&secret_key.to_bytes())) {
+                match fs::write(&priv_key, z32::encode(&secret_key.to_bytes())).await {
                     Ok(_) => {
                         tracing::info!("dot_ssh: Successfully wrote priv_key");
                     }
@@ -512,7 +515,7 @@ pub fn dot_ssh(
             // check pub and priv key already exists
             if pub_key.exists() && priv_key.exists() {
                 // read secret key
-                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                if let Ok(secret_key) = fs::read(priv_key.clone()).await {
                     let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
                     sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
                     return Ok(SecretKey::from_bytes(&sk_bytes));
