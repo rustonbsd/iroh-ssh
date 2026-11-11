@@ -2,10 +2,8 @@ use crate::{Service, ServiceParams};
 
 use anyhow::{Context, anyhow, bail};
 
-#[cfg(target_os = "windows")]
 mod firewall;
 
-#[cfg(target_os = "windows")]
 use std::{
     ffi::{OsStr, OsString, c_void},
     fs, io, iter, mem,
@@ -16,10 +14,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(target_os = "windows")]
 use tokio::task;
 
-#[cfg(target_os = "windows")]
 use windows_service::{
     Error as WinServiceError,
     service::{
@@ -30,7 +26,6 @@ use windows_service::{
     service_manager::{ServiceManager, ServiceManagerAccess},
 };
 
-#[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::{
         ERROR_INSUFFICIENT_BUFFER, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST,
@@ -48,26 +43,19 @@ use windows_sys::Win32::{
     Storage::FileSystem::{DELETE, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE},
 };
 
-#[cfg(target_os = "windows")]
 #[derive(Debug, Clone)]
 pub struct WindowsService;
 
-#[cfg(target_os = "windows")]
 static SERVICE_SSH_PORT: OnceLock<u16> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
 static SERVICE_RELAY_URLS: OnceLock<Vec<String>> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
 static SERVICE_EXTRA_RELAY_URLS: OnceLock<Vec<String>> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
 static SERVICE_KEY_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
 static SERVICE_NO_PROBE: OnceLock<bool> = OnceLock::new();
 
-#[cfg(target_os = "windows")]
 impl Service for WindowsService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         task::spawn_blocking(move || WindowsService::install_blocking(service_params))
@@ -77,7 +65,7 @@ impl Service for WindowsService {
     }
 
     async fn info() -> anyhow::Result<()> {
-        todo!("service info is not yet supported")
+        bail!("service info is not yet supported")
     }
 
     async fn uninstall() -> anyhow::Result<()> {
@@ -88,7 +76,6 @@ impl Service for WindowsService {
     }
 }
 
-#[cfg(target_os = "windows")]
 impl WindowsService {
     pub async fn run_service(service_params: ServiceParams) -> anyhow::Result<()> {
         task::spawn_blocking(move || WindowsService::run_service_dispatcher(service_params))
@@ -546,7 +533,6 @@ impl WindowsService {
     }
 }
 
-#[cfg(target_os = "windows")]
 mod service_runtime {
     use super::WindowsService;
     use crate::ServerArgs;
