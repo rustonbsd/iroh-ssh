@@ -1,8 +1,8 @@
 use clap::Parser;
 use iroh_ssh::{Cli, Cmd, ConnectArgs, ServiceCmd, api};
 
-#[cfg(not(target_os = "windows"))]
-use anyhow::bail;
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,7 +33,16 @@ async fn main() -> anyhow::Result<()> {
                         relay_url,
                         extra_relay_url,
                         no_probe,
-                    } => api::service::install(ssh_port, key_dir, relay_url, extra_relay_url, no_probe).await,
+                    } => {
+                        api::service::install(
+                            ssh_port,
+                            key_dir,
+                            relay_url,
+                            extra_relay_url,
+                            no_probe,
+                        )
+                        .await
+                    }
                     ServiceCmd::Uninstall => api::service::uninstall().await,
                 }
             }
@@ -57,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         }
         #[cfg(not(target_os = "windows"))]
         Some(Cmd::RunService(_)) => {
-            bail!("service runtime is only available on windows");
+            anyhow::bail!("service runtime is only available on windows");
         }
         None => {
             let conn_args = ConnectArgs {
