@@ -16,7 +16,7 @@ use iroh::{
 };
 use tokio::{
     fs,
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     net::TcpStream,
     process::{Child, Command},
 };
@@ -243,11 +243,11 @@ impl IrohSsh {
         let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move {
-            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
+            let res = copy_flush(&mut local_read, &mut iroh_send).await;
             iroh_send.finish().ok();
             res
         };
-        let b_to_a = async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
+        let b_to_a = async move { copy_flush(&mut iroh_recv, &mut local_write).await };
 
         let (_, _) = tokio::join!(a_to_b, b_to_a);
         Ok(())
@@ -258,11 +258,11 @@ impl IrohSsh {
         let (mut tcp_read, mut tcp_write) = conn.into_split();
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move {
-            let res = tokio::io::copy(&mut local_read, &mut tcp_write).await;
+            let res = copy_flush(&mut local_read, &mut tcp_write).await;
             tcp_write.shutdown().await.ok();
             res
         };
-        let b_to_a = async move { tokio::io::copy(&mut tcp_read, &mut local_write).await };
+        let b_to_a = async move { copy_flush(&mut tcp_read, &mut local_write).await };
 
         let (_, _) = tokio::join!(a_to_b, b_to_a);
         Ok(())
@@ -362,12 +362,12 @@ impl ProtocolHandler for IrohSsh {
                         let (mut local_read, mut local_write) = ssh_stream.split();
 
                         let a_to_b = async move {
-                            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
+                            let res = copy_flush(&mut local_read, &mut iroh_send).await;
                             iroh_send.finish().ok();
                             res
                         };
                         let b_to_a = async move {
-                            let res = tokio::io::copy(&mut iroh_recv, &mut local_write).await;
+                            let res = copy_flush(&mut iroh_recv, &mut local_write).await;
                             local_write.shutdown().await.ok();
                             res
                         };
@@ -385,6 +385,28 @@ impl ProtocolHandler for IrohSsh {
         }
 
         Ok(())
+    }
+}
+
+/// Copy data from reader to writer, flushing after every write.
+/// Unlike `tokio::io::copy` (which buffers 8KB before flushing),
+/// this ensures interactive data like SSH keystrokes are forwarded
+/// immediately.
+pub(crate) async fn copy_flush<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = [0u8; 8 * 1024];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            return Ok(total);
+        }
+        writer.write_all(&buf[..n]).await?;
+        writer.flush().await?;
+        total += n as u64;
     }
 }
 
