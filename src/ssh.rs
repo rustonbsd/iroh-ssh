@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use iroh::{
     Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
-    endpoint::{Connection, RelayMode},
+    endpoint::{Connection, QuicTransportConfig, RelayMode, VarInt},
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
@@ -22,6 +22,7 @@ use tokio::{
 };
 
 const COPY_BUFFER_SIZE: usize = 64 * 1024;
+const STREAM_RECEIVE_WINDOW: u32 = 4 * 1024 * 1024;
 
 impl Builder {
     pub fn new() -> Self {
@@ -107,7 +108,12 @@ impl Builder {
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
-            .address_lookup(MdnsAddressLookup::builder().advertise(true));
+            .address_lookup(MdnsAddressLookup::builder().advertise(true))
+            .transport_config(
+                QuicTransportConfig::builder()
+                    .stream_receive_window(VarInt::from_u32(STREAM_RECEIVE_WINDOW))
+                    .build(),
+            );
 
         if !self.relay_urls.is_empty() {
             let relay_map = self.relay_urls.iter().cloned().collect();
