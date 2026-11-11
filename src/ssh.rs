@@ -257,6 +257,7 @@ impl IrohSsh {
 
     pub async fn connect_tcpip(&self, host_addr: &str) -> anyhow::Result<()> {
         let conn = tokio::net::TcpStream::connect(host_addr).await?;
+        conn.set_nodelay(true)?;
         let (mut tcp_read, mut tcp_write) = conn.into_split();
         let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
         let a_to_b = async move {
@@ -359,6 +360,7 @@ impl ProtocolHandler for IrohSsh {
 
                 match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
                     Ok(mut ssh_stream) => {
+                        ssh_stream.set_nodelay(true).ok();
                         println!("Connected to local SSH server on port {}", self.ssh_port);
 
                         let (mut local_read, mut local_write) = ssh_stream.split();
@@ -638,5 +640,25 @@ mod tests {
         assert_eq!(args[host_pos + 1], "rsync");
         assert_eq!(args[host_pos + 2], "--server");
         assert_eq!(args[host_pos + 3], "-e.LsfxCIvu");
+    }
+
+    #[tokio::test]
+    async fn copy_flush_flushes_without_a_newline_or_eof() {
+        let (mut input, mut reader) = tokio::io::duplex(64);
+        let (output, mut sink) = tokio::io::duplex(COPY_BUFFER_SIZE);
+        let mut writer = tokio::io::BufWriter::new(output);
+
+        let copy = tokio::spawn(async move { copy_flush(&mut reader, &mut writer).await });
+
+        input.write_all(b"no newline").await.unwrap();
+        let mut received = [0; 10];
+        tokio::time::timeout(Duration::from_secs(5), sink.read_exact(&mut received))
+            .await
+            .expect("data should arrive while the input is still open")
+            .unwrap();
+        assert_eq!(&received, b"no newline");
+
+        drop(input);
+        copy.await.unwrap().unwrap();
     }
 }
