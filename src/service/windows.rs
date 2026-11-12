@@ -14,8 +14,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tokio::task;
-
 use windows_service::{
     Error as WinServiceError,
     service::{
@@ -58,10 +56,9 @@ static SERVICE_NO_PROBE: OnceLock<bool> = OnceLock::new();
 
 impl Service for WindowsService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
-        task::spawn_blocking(move || WindowsService::install_blocking(service_params))
+        WindowsService::install(service_params)
             .await
-            .context("windows service install task panicked")??;
-        Ok(())
+            .context("windows service install task panicked")
     }
 
     async fn info() -> anyhow::Result<()> {
@@ -69,22 +66,20 @@ impl Service for WindowsService {
     }
 
     async fn uninstall() -> anyhow::Result<()> {
-        task::spawn_blocking(WindowsService::uninstall_blocking)
+        WindowsService::uninstall()
             .await
-            .context("windows service uninstall task panicked")??;
-        Ok(())
+            .context("windows service uninstall task panicked")
     }
 }
 
 impl WindowsService {
     pub async fn run_service(service_params: ServiceParams) -> anyhow::Result<()> {
-        task::spawn_blocking(move || WindowsService::run_service_dispatcher(service_params))
+        WindowsService::run_service_dispatcher(service_params)
             .await
-            .context("windows service dispatcher task panicked")??;
-        Ok(())
+            .context("windows service dispatcher task panicked")
     }
 
-    fn run_service_dispatcher(service_params: ServiceParams) -> anyhow::Result<()> {
+    async fn run_service_dispatcher(service_params: ServiceParams) -> anyhow::Result<()> {
         SERVICE_SSH_PORT
             .set(service_params.ssh_port)
             .ok()
@@ -130,7 +125,6 @@ impl WindowsService {
     fn service_no_probe() -> bool {
         *SERVICE_NO_PROBE.get().unwrap_or(&false)
     }
-
     pub const SERVICE_NAME: &'static str = "iroh-ssh";
     pub const SERVICE_DISPLAY_NAME: &'static str = "iroh-ssh";
     pub const SERVICE_DESCRIPTION: &'static str = "SSH to any machine without ip";
@@ -141,11 +135,12 @@ impl WindowsService {
     pub const SERVICE_PROFILE_ROOT: &'static str = r"C:\\Windows\\ServiceProfiles\\iroh-ssh";
     pub const SERVICE_SSH_DIR: &'static str = r"C:\\Windows\\ServiceProfiles\\iroh-ssh\\.ssh";
 
-    fn install_blocking(service_params: ServiceParams) -> anyhow::Result<()> {
+    async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         let staged_binary = Self::stage_binary().context("failed to stage service binary")?;
 
         tracing::info!("Adding Windows Firewall rules for service executable");
         firewall::add_firewall_rules(&staged_binary)
+            .await
             .context("failed to add Windows Firewall rules - ensure running as administrator")?;
 
         let service = Self::create_or_configure_service(&staged_binary, &service_params)
@@ -171,12 +166,12 @@ impl WindowsService {
         Ok(())
     }
 
-    fn uninstall_blocking() -> anyhow::Result<()> {
+    async fn uninstall() -> anyhow::Result<()> {
         Self::remove_service().context("failed to remove windows service")?;
 
         // Remove Windows Firewall rules (ignore errors on cleanup)
         tracing::info!("Removing Windows Firewall rules for service");
-        if let Err(e) = firewall::remove_firewall_rules() {
+        if let Err(e) = firewall::remove_firewall_rules().await {
             tracing::warn!("Failed to remove firewall rules (may not exist): {}", e);
         }
         let staged_binary = Path::new(Self::INSTALL_ROOT).join(Self::SERVICE_BINARY_NAME);
