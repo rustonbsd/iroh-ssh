@@ -1,4 +1,4 @@
-use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
+use crate::{Builder, Inner, IrohSsh, cli::SshOpts, shutdown_signal};
 use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 
 use anyhow::bail;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use iroh::{
     Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
-    endpoint::{Connection, QuicTransportConfig, RelayMode, VarInt},
+    endpoint::{Connection, QuicTransportConfig, RecvStream, RelayMode, SendStream, VarInt},
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
@@ -248,16 +248,30 @@ impl IrohSsh {
             .endpoint
             .connect(endpoint_id, &IrohSsh::ALPN())
             .await?;
-        let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
-        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
-        let a_to_b = async move {
-            let res = copy_flush(&mut local_read, &mut iroh_send).await;
-            iroh_send.finish().ok();
-            res
-        };
-        let b_to_a = async move { copy_flush(&mut iroh_recv, &mut local_write).await };
+        let (iroh_send, iroh_recv) = conn.open_bi().await?;
+        let stdin_to_iroh = copy_to_iroh(tokio::io::stdin(), iroh_send);
+        let iroh_to_stdout = copy_from_iroh(iroh_recv, tokio::io::stdout());
+        tokio::pin!(iroh_to_stdout);
 
-        let (_, _) = tokio::join!(a_to_b, b_to_a);
+        let copy_fut = async {
+            tokio::select! {
+                res = &mut iroh_to_stdout => res,
+                // A failed write means the server stopped reading, and whatever it sent
+                // before that is still worth receiving, so only the read side's errors matter.
+                _ = stdin_to_iroh => iroh_to_stdout.await,
+            }
+        };
+
+        // Keep reading after stdin closes, but don't wait for stdin once the server
+        // is done: ssh only closes it after seeing EOF from us.
+        tokio::select! {
+            res = copy_fut => res?,
+            // Close the connection so the server doesn't wait for an idle timeout.
+            _ = shutdown_signal() => 0u64,
+        };
+
+        conn.close(0u32.into(), b"done");
+        inner.endpoint.close().await;
         Ok(())
     }
 
@@ -265,20 +279,24 @@ impl IrohSsh {
         let conn = tokio::net::TcpStream::connect(host_addr).await?;
         conn.set_nodelay(true)?;
         let (mut tcp_read, mut tcp_write) = conn.into_split();
-        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
-        let a_to_b = async move {
-            let res = copy_flush(&mut local_read, &mut tcp_write).await;
+        let stdin_to_tcp = async move {
+            let res = copy_flush(&mut tokio::io::stdin(), &mut tcp_write).await;
             tcp_write.shutdown().await.ok();
             res
         };
-        let b_to_a = async move { copy_flush(&mut tcp_read, &mut local_write).await };
+        let tcp_to_stdout =
+            async move { copy_flush(&mut tcp_read, &mut tokio::io::stdout()).await };
 
-        let (_, _) = tokio::join!(a_to_b, b_to_a);
+        let (_, _) = tokio::join!(stdin_to_tcp, tcp_to_stdout);
         Ok(())
     }
 
     pub fn endpoint_id(&self) -> EndpointId {
         self.inner.as_ref().expect("inner not set").endpoint.id()
+    }
+
+    pub fn router(&self) -> Option<Router> {
+        self.inner.to_owned().map(|inner| inner.router)
     }
 }
 
@@ -361,7 +379,7 @@ impl ProtocolHandler for IrohSsh {
         let endpoint_id = connection.remote_id();
 
         match connection.accept_bi().await {
-            Ok((mut iroh_send, mut iroh_recv)) => {
+            Ok((iroh_send, iroh_recv)) => {
                 println!("Accepted bidirectional stream from {endpoint_id}");
 
                 match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
@@ -369,20 +387,12 @@ impl ProtocolHandler for IrohSsh {
                         ssh_stream.set_nodelay(true).ok();
                         println!("Connected to local SSH server on port {}", self.ssh_port);
 
-                        let (mut local_read, mut local_write) = ssh_stream.split();
+                        let (local_read, local_write) = ssh_stream.split();
 
-                        let a_to_b = async move {
-                            let res = copy_flush(&mut local_read, &mut iroh_send).await;
-                            iroh_send.finish().ok();
-                            res
-                        };
-                        let b_to_a = async move {
-                            let res = copy_flush(&mut iroh_recv, &mut local_write).await;
-                            local_write.shutdown().await.ok();
-                            res
-                        };
+                        let ssh_to_iroh = copy_to_iroh(local_read, iroh_send);
+                        let iroh_to_ssh = copy_from_iroh(iroh_recv, local_write);
 
-                        let (_, _) = tokio::join!(a_to_b, b_to_a);
+                        let (_, _) = tokio::join!(ssh_to_iroh, iroh_to_ssh);
                     }
                     Err(e) => {
                         println!("Failed to connect to SSH server: {e}");
@@ -396,6 +406,20 @@ impl ProtocolHandler for IrohSsh {
 
         Ok(())
     }
+}
+
+/// Copy from a reader to an iroh stream, then finish the stream.
+async fn copy_to_iroh(mut from: impl AsyncRead + Unpin, mut send: SendStream) -> io::Result<u64> {
+    let res = copy_flush(&mut from, &mut send).await;
+    send.finish().ok();
+    res
+}
+
+/// Copy from an iroh stream to a writer, then shut the writer down.
+async fn copy_from_iroh(mut recv: RecvStream, mut to: impl AsyncWrite + Unpin) -> io::Result<u64> {
+    let res = copy_flush(&mut recv, &mut to).await;
+    to.shutdown().await.ok();
+    res
 }
 
 /// Copy data from reader to writer, flushing after every write.

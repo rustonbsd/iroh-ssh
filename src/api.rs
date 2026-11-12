@@ -8,7 +8,7 @@ use tokio::io;
 use crate::{
     IrohSsh,
     cli::{ConnectArgs, ProxyArgs, ServerArgs},
-    dot_ssh,
+    dot_ssh, shutdown_signal,
 };
 
 fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
@@ -149,7 +149,10 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
-    tokio::signal::ctrl_c().await?;
+    shutdown_signal().await?;
+    if let Some(router) = iroh_ssh.router() {
+        router.shutdown().await?;
+    }
     Ok(())
 }
 
