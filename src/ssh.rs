@@ -1,4 +1,4 @@
-use crate::{Builder, Inner, IrohSsh, cli::SshOpts};
+use crate::{Builder, Inner, IrohSsh, cli::SshOpts, shutdown_signal};
 use std::{ffi::OsString, io, path::Path, process::Stdio, time::Duration};
 
 use anyhow::bail;
@@ -11,14 +11,18 @@ use std::sync::Arc;
 
 use iroh::{
     Endpoint, EndpointId, RelayConfig, RelayUrl, SecretKey,
-    endpoint::{Connection, RelayMode},
+    endpoint::{Connection, QuicTransportConfig, RecvStream, RelayMode, SendStream, VarInt},
     protocol::{ProtocolHandler, Router},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    fs,
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     net::TcpStream,
     process::{Child, Command},
 };
+
+const COPY_BUFFER_SIZE: usize = 64 * 1024;
+const STREAM_RECEIVE_WINDOW: u32 = 4 * 1024 * 1024;
 
 impl Builder {
     pub fn new() -> Self {
@@ -68,7 +72,7 @@ impl Builder {
         self
     }
 
-    pub fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
+    pub async fn dot_ssh_integration(mut self, persist: bool, service: bool) -> Self {
         tracing::info!(
             "dot_ssh_integration: persist={}, service={}",
             persist,
@@ -80,7 +84,9 @@ impl Builder {
             persist,
             service,
             self.key_dir.as_deref(),
-        ) {
+        )
+        .await
+        {
             Ok(secret_key) => {
                 tracing::info!("dot_ssh_integration: Successfully loaded/created SSH keys");
                 self.secret_key = secret_key.to_bytes();
@@ -102,7 +108,12 @@ impl Builder {
         let secret_key = SecretKey::from_bytes(&self.secret_key);
         let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
-            .address_lookup(MdnsAddressLookup::builder().advertise(true));
+            .address_lookup(MdnsAddressLookup::builder().advertise(true))
+            .transport_config(
+                QuicTransportConfig::builder()
+                    .stream_receive_window(VarInt::from_u32(STREAM_RECEIVE_WINDOW))
+                    .build(),
+            );
 
         if !self.relay_urls.is_empty() {
             let relay_map = self.relay_urls.iter().cloned().collect();
@@ -237,36 +248,55 @@ impl IrohSsh {
             .endpoint
             .connect(endpoint_id, &IrohSsh::ALPN())
             .await?;
-        let (mut iroh_send, mut iroh_recv) = conn.open_bi().await?;
-        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
-        let a_to_b = async move {
-            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
-            iroh_send.finish().ok();
-            res
-        };
-        let b_to_a = async move { tokio::io::copy(&mut iroh_recv, &mut local_write).await };
+        let (iroh_send, iroh_recv) = conn.open_bi().await?;
+        let stdin_to_iroh = copy_to_iroh(tokio::io::stdin(), iroh_send);
+        let iroh_to_stdout = copy_from_iroh(iroh_recv, tokio::io::stdout());
+        tokio::pin!(iroh_to_stdout);
 
-        let (_, _) = tokio::join!(a_to_b, b_to_a);
+        let copy_fut = async {
+            tokio::select! {
+                res = &mut iroh_to_stdout => res,
+                // A failed write means the server stopped reading, and whatever it sent
+                // before that is still worth receiving, so only the read side's errors matter.
+                _ = stdin_to_iroh => iroh_to_stdout.await,
+            }
+        };
+
+        // Keep reading after stdin closes, but don't wait for stdin once the server
+        // is done: ssh only closes it after seeing EOF from us.
+        tokio::select! {
+            res = copy_fut => res?,
+            // Close the connection so the server doesn't wait for an idle timeout.
+            _ = shutdown_signal() => 0u64,
+        };
+
+        conn.close(0u32.into(), b"done");
+        inner.endpoint.close().await;
         Ok(())
     }
 
     pub async fn connect_tcpip(&self, host_addr: &str) -> anyhow::Result<()> {
         let conn = tokio::net::TcpStream::connect(host_addr).await?;
+        conn.set_nodelay(true)?;
         let (mut tcp_read, mut tcp_write) = conn.into_split();
-        let (mut local_read, mut local_write) = (tokio::io::stdin(), tokio::io::stdout());
-        let a_to_b = async move {
-            let res = tokio::io::copy(&mut local_read, &mut tcp_write).await;
+        let stdin_to_tcp = async move {
+            let res = copy_flush(&mut tokio::io::stdin(), &mut tcp_write).await;
             tcp_write.shutdown().await.ok();
             res
         };
-        let b_to_a = async move { tokio::io::copy(&mut tcp_read, &mut local_write).await };
+        let tcp_to_stdout =
+            async move { copy_flush(&mut tcp_read, &mut tokio::io::stdout()).await };
 
-        let (_, _) = tokio::join!(a_to_b, b_to_a);
+        let (_, _) = tokio::join!(stdin_to_tcp, tcp_to_stdout);
         Ok(())
     }
 
     pub fn endpoint_id(&self) -> EndpointId {
         self.inner.as_ref().expect("inner not set").endpoint.id()
+    }
+
+    pub fn router(&self) -> Option<Router> {
+        self.inner.to_owned().map(|inner| inner.router)
     }
 }
 
@@ -349,27 +379,20 @@ impl ProtocolHandler for IrohSsh {
         let endpoint_id = connection.remote_id();
 
         match connection.accept_bi().await {
-            Ok((mut iroh_send, mut iroh_recv)) => {
+            Ok((iroh_send, iroh_recv)) => {
                 println!("Accepted bidirectional stream from {endpoint_id}");
 
                 match TcpStream::connect(format!("127.0.0.1:{}", self.ssh_port)).await {
                     Ok(mut ssh_stream) => {
+                        ssh_stream.set_nodelay(true).ok();
                         println!("Connected to local SSH server on port {}", self.ssh_port);
 
-                        let (mut local_read, mut local_write) = ssh_stream.split();
+                        let (local_read, local_write) = ssh_stream.split();
 
-                        let a_to_b = async move {
-                            let res = tokio::io::copy(&mut local_read, &mut iroh_send).await;
-                            iroh_send.finish().ok();
-                            res
-                        };
-                        let b_to_a = async move {
-                            let res = tokio::io::copy(&mut iroh_recv, &mut local_write).await;
-                            local_write.shutdown().await.ok();
-                            res
-                        };
+                        let ssh_to_iroh = copy_to_iroh(local_read, iroh_send);
+                        let iroh_to_ssh = copy_from_iroh(iroh_recv, local_write);
 
-                        let (_, _) = tokio::join!(a_to_b, b_to_a);
+                        let (_, _) = tokio::join!(ssh_to_iroh, iroh_to_ssh);
                     }
                     Err(e) => {
                         println!("Failed to connect to SSH server: {e}");
@@ -385,7 +408,43 @@ impl ProtocolHandler for IrohSsh {
     }
 }
 
-pub fn dot_ssh(
+/// Copy from a reader to an iroh stream, then finish the stream.
+async fn copy_to_iroh(mut from: impl AsyncRead + Unpin, mut send: SendStream) -> io::Result<u64> {
+    let res = copy_flush(&mut from, &mut send).await;
+    send.finish().ok();
+    res
+}
+
+/// Copy from an iroh stream to a writer, then shut the writer down.
+async fn copy_from_iroh(mut recv: RecvStream, mut to: impl AsyncWrite + Unpin) -> io::Result<u64> {
+    let res = copy_flush(&mut recv, &mut to).await;
+    to.shutdown().await.ok();
+    res
+}
+
+/// Copy data from reader to writer, flushing after every write.
+/// Unlike `tokio::io::copy` (which buffers 8KB before flushing),
+/// this ensures interactive data like SSH keystrokes are forwarded
+/// immediately.
+pub(crate) async fn copy_flush<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = [0u8; COPY_BUFFER_SIZE];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            return Ok(total);
+        }
+        writer.write_all(&buf[..n]).await?;
+        writer.flush().await?;
+        total += n as u64;
+    }
+}
+
+pub async fn dot_ssh(
     default_secret_key: &SecretKey,
     persist: bool,
     _service: bool,
@@ -424,7 +483,7 @@ pub fn dot_ssh(
             // Ensure directory exists when running as service
             if !ssh_dir.exists() {
                 tracing::info!("dot_ssh: Service SSH dir doesn't exist, creating it");
-                std::fs::create_dir_all(&ssh_dir)?;
+                fs::create_dir_all(&ssh_dir).await?;
             }
         }
     }
@@ -449,9 +508,9 @@ pub fn dot_ssh(
         }
         (false, true) => {
             tracing::info!("dot_ssh: Creating ssh_dir: {}", ssh_dir.display());
-            std::fs::create_dir_all(&ssh_dir)?;
+            fs::create_dir_all(&ssh_dir).await?;
             println!("[INFO] created .ssh folder: {}", ssh_dir.display());
-            dot_ssh(default_secret_key, persist, _service, key_dir)
+            Box::pin(dot_ssh(default_secret_key, persist, _service, key_dir)).await
         }
         (true, true) => {
             tracing::info!("dot_ssh: Branch (true, true) - directory exists, persist enabled");
@@ -462,7 +521,7 @@ pub fn dot_ssh(
             if pub_key.exists() && priv_key.exists() {
                 tracing::info!("dot_ssh: Keys exist, reading them");
                 // read secret key
-                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                if let Ok(secret_key) = fs::read(priv_key.clone()).await {
                     let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
                     sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
                     Ok(SecretKey::from_bytes(&sk_bytes))
@@ -477,7 +536,7 @@ pub fn dot_ssh(
                 let secret_key = default_secret_key.clone();
                 let public_key = secret_key.public();
 
-                match std::fs::write(&pub_key, z32::encode(public_key.as_bytes())) {
+                match fs::write(&pub_key, z32::encode(public_key.as_bytes())).await {
                     Ok(_) => {
                         tracing::info!("dot_ssh: Successfully wrote pub_key");
                     }
@@ -491,7 +550,7 @@ pub fn dot_ssh(
                     }
                 }
 
-                match std::fs::write(&priv_key, z32::encode(&secret_key.to_bytes())) {
+                match fs::write(&priv_key, z32::encode(&secret_key.to_bytes())).await {
                     Ok(_) => {
                         tracing::info!("dot_ssh: Successfully wrote priv_key");
                     }
@@ -512,7 +571,7 @@ pub fn dot_ssh(
             // check pub and priv key already exists
             if pub_key.exists() && priv_key.exists() {
                 // read secret key
-                if let Ok(secret_key) = std::fs::read(priv_key.clone()) {
+                if let Ok(secret_key) = fs::read(priv_key.clone()).await {
                     let mut sk_bytes = [0u8; SECRET_KEY_LENGTH];
                     sk_bytes.copy_from_slice(z32::decode(secret_key.as_slice())?.as_slice());
                     return Ok(SecretKey::from_bytes(&sk_bytes));
@@ -611,5 +670,25 @@ mod tests {
         assert_eq!(args[host_pos + 1], "rsync");
         assert_eq!(args[host_pos + 2], "--server");
         assert_eq!(args[host_pos + 3], "-e.LsfxCIvu");
+    }
+
+    #[tokio::test]
+    async fn copy_flush_flushes_without_a_newline_or_eof() {
+        let (mut input, mut reader) = tokio::io::duplex(64);
+        let (output, mut sink) = tokio::io::duplex(COPY_BUFFER_SIZE);
+        let mut writer = tokio::io::BufWriter::new(output);
+
+        let copy = tokio::spawn(async move { copy_flush(&mut reader, &mut writer).await });
+
+        input.write_all(b"no newline").await.unwrap();
+        let mut received = [0; 10];
+        tokio::time::timeout(Duration::from_secs(5), sink.read_exact(&mut received))
+            .await
+            .expect("data should arrive while the input is still open")
+            .unwrap();
+        assert_eq!(&received, b"no newline");
+
+        drop(input);
+        copy.await.unwrap().unwrap();
     }
 }

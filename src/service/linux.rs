@@ -1,11 +1,11 @@
+use anyhow::bail;
+
 use crate::Service;
 use crate::ServiceParams;
 
-#[cfg(target_os = "linux")]
 #[derive(Debug, Clone)]
 pub struct LinuxService;
 
-#[cfg(target_os = "linux")]
 impl Service for LinuxService {
     async fn install(service_params: ServiceParams) -> anyhow::Result<()> {
         let path = LinuxService::init_install_script(service_params)?;
@@ -20,7 +20,7 @@ impl Service for LinuxService {
     }
 
     async fn info() -> anyhow::Result<()> {
-        todo!("service info is not yet supported")
+        bail!("service info is not yet supported")
     }
 
     async fn uninstall() -> anyhow::Result<()> {
@@ -36,7 +36,6 @@ impl Service for LinuxService {
     }
 }
 
-#[cfg(target_os = "linux")]
 impl LinuxService {
     const INSTALL_SH_BYTES: &str = include_str!("../../service/install_linux.sh");
     const UNINSTALL_SH_BYTES: &str = include_str!("../../service/uninstall_linux.sh");

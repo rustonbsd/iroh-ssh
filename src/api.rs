@@ -3,11 +3,12 @@ use std::{path::PathBuf, process::ExitStatus, str::FromStr as _};
 use anyhow::bail;
 use homedir::my_home;
 use iroh::{EndpointId, RelayUrl, SecretKey};
+use tokio::io;
 
 use crate::{
     IrohSsh,
     cli::{ConnectArgs, ProxyArgs, ServerArgs},
-    dot_ssh,
+    dot_ssh, shutdown_signal,
 };
 
 fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
@@ -17,20 +18,12 @@ fn parse_relay_urls(urls: &[String]) -> anyhow::Result<Vec<RelayUrl>> {
 }
 
 pub async fn info_mode(key_dir: Option<PathBuf>) -> anyhow::Result<()> {
-    let server_key = dot_ssh(
-        &SecretKey::generate(),
-        false,
-        false,
-        key_dir.as_deref(),
-    )
-    .ok();
-    let service_key = dot_ssh(
-        &SecretKey::generate(),
-        false,
-        true,
-        key_dir.as_deref(),
-    )
-    .ok();
+    let server_key = dot_ssh(&SecretKey::generate(), false, false, key_dir.as_deref())
+        .await
+        .ok();
+    let service_key = dot_ssh(&SecretKey::generate(), false, true, key_dir.as_deref())
+        .await
+        .ok();
 
     if server_key.is_none() && service_key.is_none() {
         println!(
@@ -123,7 +116,7 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
         .extra_relay_urls(parse_relay_urls(&server_args.extra_relay_url)?)
         .skip_server_probe(server_args.no_probe);
     if server_args.persist {
-        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service);
+        iroh_ssh_builder = iroh_ssh_builder.dot_ssh_integration(true, service).await;
     }
     let iroh_ssh = iroh_ssh_builder.build().await?;
 
@@ -156,7 +149,10 @@ pub async fn server_mode(server_args: ServerArgs, service: bool) -> anyhow::Resu
 
     println!("Waiting for incoming connections...");
     println!("Press Ctrl+C to exit");
-    tokio::signal::ctrl_c().await?;
+    shutdown_signal().await?;
+    if let Some(router) = iroh_ssh.router() {
+        router.shutdown().await?;
+    }
     Ok(())
 }
 
@@ -200,7 +196,7 @@ pub async fn client_mode(connect_args: ConnectArgs) -> anyhow::Result<()> {
     {
         Ok(child) => child,
         Err(err) => match err.kind() {
-            std::io::ErrorKind::NotFound => {
+            io::ErrorKind::NotFound => {
                 eprintln!(
                     "SSH command not found, please make sure your system has an SSH client installed and and that the exact cmd \"ssh\" is in your PATH"
                 );

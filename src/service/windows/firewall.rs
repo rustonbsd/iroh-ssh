@@ -1,9 +1,8 @@
-#[cfg(target_os = "windows")]
 use anyhow::{Context, Result, bail};
 use std::path::Path;
-use std::process::Command;
+use tokio::process::Command;
 
-pub fn add_firewall_rules(executable_path: &Path) -> Result<()> {
+pub async fn add_firewall_rules(executable_path: &Path) -> Result<()> {
     let exe_path = executable_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("executable path contains invalid UTF-8"))?;
@@ -70,6 +69,7 @@ Write-Host 'Added HTTPS rule'
             &ps_script,
         ])
         .output()
+        .await
         .context("Failed to execute PowerShell to add firewall rules")?;
 
     if !output.status.success() {
@@ -88,7 +88,7 @@ Write-Host 'Added HTTPS rule'
     Ok(())
 }
 
-pub fn remove_firewall_rules() -> Result<()> {
+pub async fn remove_firewall_rules() -> Result<()> {
     tracing::info!("Removing Windows Firewall rules for iroh-ssh");
 
     let ps_script = r#"
@@ -113,6 +113,7 @@ Write-Host 'Removed HTTPS rule'
             ps_script,
         ])
         .output()
+        .await
         .context("Failed to execute PowerShell to remove firewall rules")?;
 
     if !output.status.success() {
